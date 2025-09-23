@@ -2,41 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Scholars Cambridge Competition Design System - Glassmorphism Style
+All colors MUST be HSL. Single source of truth for design tokens.
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
+    /* Brand Colors */
+    --primary-blue: 221 78% 51%; /* #1A65EA */
+    --secondary-orange: 44 97% 52%; /* #FBBC05 */
+    
+    /* Neutral Palette */
+    --text-dark: 218 52% 15%; /* #0F1724 */
+    --text-muted: 220 26% 32%; /* #374151 */
+    --background-light: 210 20% 96%; /* #F3F4F6 */
+    --white: 0 0% 100%; /* #FFFFFF */
+    --success: 160 68% 40%; /* #10B981 */
+    --danger: 4 86% 58%; /* #EF4444 */
+    
+    /* Glass Effect Variables */
+    --glass-bg: 0 0% 100% / 0.05;
+    --glass-border: 0 0% 100% / 0.08;
+    --glass-shadow: 218 52% 15% / 0.08;
+    
+    /* Semantic Tokens */
+    --background: var(--background-light);
+    --foreground: var(--text-dark);
+    --primary: var(--primary-blue);
+    --primary-foreground: var(--white);
+    --secondary: var(--background-light);
+    --secondary-foreground: var(--primary-blue);
+    --accent: var(--secondary-orange);
+    --accent-foreground: var(--text-dark);
+    --muted: 210 20% 92%;
+    --muted-foreground: var(--text-muted);
+    --card: var(--white);
+    --card-foreground: var(--text-dark);
+    --popover: var(--white);
+    --popover-foreground: var(--text-dark);
+    --border: 210 20% 90%;
+    --input: 210 20% 90%;
+    --ring: var(--primary-blue);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--white);
+    
+    /* Radius Scale */
+    --radius-small: 6px;
+    --radius: 12px;
+    --radius-pill: 999px;
 
     --sidebar-background: 0 0% 98%;
 
@@ -56,41 +69,46 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 218 52% 8%;
+    --foreground: var(--white);
+    --glass-bg: 0 0% 0% / 0.1;
+    --glass-border: 0 0% 100% / 0.1;
+    --glass-shadow: 0 0% 0% / 0.2;
+    
+    --card: 218 52% 10%;
+    --card-foreground: var(--white);
+    --popover: 218 52% 10%;
+    --popover-foreground: var(--white);
+    --secondary: 218 52% 12%;
+    --secondary-foreground: var(--white);
+    --muted: 218 52% 15%;
+    --muted-foreground: 220 26% 60%;
+    --border: 218 52% 20%;
+    --input: 218 52% 15%;
+  }
+  
+  /* Spacing Scale - 4/8/12/16/24/32/48/64 */
+  .space-xs { @apply p-1; } /* 4px */
+  .space-sm { @apply p-2; } /* 8px */
+  .space-md { @apply p-3; } /* 12px */
+  .space-lg { @apply p-4; } /* 16px */
+  .space-xl { @apply p-6; } /* 24px */
+  .space-2xl { @apply p-8; } /* 32px */
+  .space-3xl { @apply p-12; } /* 48px */
+  .space-4xl { @apply p-16; } /* 64px */
+  
+  /* Glass Effect Utilities */
+  .glass {
+    @apply bg-white/5 backdrop-blur-[12px] border border-white/[0.08];
+    box-shadow: 0 12px 30px rgba(13, 25, 45, 0.08);
+  }
+  
+  .glass-card {
+    @apply glass rounded-xl;
+  }
+  
+  .glass-nav {
+    @apply glass backdrop-blur-md border-b border-white/[0.1];
   }
 }
 
@@ -100,6 +118,15 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-jakarta antialiased;
+  }
+  
+  /* Glassmorphism Animations */
+  .hover-glass {
+    @apply transition-all duration-300 hover:bg-white/10 hover:scale-[1.02];
+  }
+  
+  .press-scale {
+    @apply active:scale-[0.98] transition-transform duration-75;
   }
 }
