@@ -51,8 +51,8 @@ const Hero = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <GlassButton variant="accent" size="lg" className="text-lg">
-              Register Now
+            <GlassButton variant="accent" size="lg" className="text-lg" asChild>
+              <a href="/register">Register Now</a>
             </GlassButton>
             <GlassButton variant="hero" size="lg" className="text-lg">
               Practice Quizzes

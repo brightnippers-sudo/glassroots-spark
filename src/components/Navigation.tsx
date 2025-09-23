@@ -7,9 +7,9 @@ const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false)
 
   const navItems = [
-    { name: "Home", href: "#home" },
-    { name: "About", href: "#about" },
-    { name: "Competitions", href: "#competitions" },
+    { name: "Home", href: "/" },
+    { name: "About", href: "/about" },
+    { name: "Competitions", href: "/competitions" },
     { name: "Resources", href: "#resources" },
     { name: "Results", href: "#results" },
   ]
@@ -42,9 +42,9 @@ const Navigation = () => {
 
           {/* Desktop CTA */}
           <div className="hidden md:block">
-            <GlassButton variant="accent" size="sm">
-              Register Now
-            </GlassButton>
+          <GlassButton variant="accent" size="sm" asChild>
+            <a href="/register">Register Now</a>
+          </GlassButton>
           </div>
 
           {/* Mobile menu button */}
@@ -76,8 +76,8 @@ const Navigation = () => {
               </a>
             ))}
             <div className="pt-4">
-              <GlassButton variant="accent" className="w-full">
-                Register Now
+            <GlassButton variant="accent" className="w-full" asChild>
+                <a href="/register">Register Now</a>
               </GlassButton>
             </div>
           </div>
