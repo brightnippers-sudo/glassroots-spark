@@ -17,6 +17,8 @@ import { GlassCard, GlassCardHeader, GlassCardTitle, GlassCardContent } from "@/
 import { GlassButton } from "@/components/ui/glass-button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 
 const Dashboard = () => {
   const [selectedRegistration, setSelectedRegistration] = useState("reg-1");
@@ -52,7 +54,9 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="min-h-screen bg-background">
+      <Navigation />
+      <div className="pt-20 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="glass-card p-8">
@@ -255,6 +259,8 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+      </div>
+      <Footer />
     </div>
   );
 };

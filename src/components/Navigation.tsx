@@ -58,10 +58,13 @@ const Navigation = () => {
           </div>
 
           {/* Desktop CTA */}
-          <div className="hidden md:block">
-          <GlassButton variant="accent" size="sm" asChild>
-            <a href="/register">Register Now</a>
-          </GlassButton>
+          <div className="hidden md:flex items-center gap-3">
+            <GlassButton variant="ghost" size="sm" asChild>
+              <a href="/login">Login</a>
+            </GlassButton>
+            <GlassButton variant="accent" size="sm" asChild>
+              <a href="/register">Register Now</a>
+            </GlassButton>
           </div>
 
           {/* Mobile menu button */}
@@ -97,8 +100,11 @@ const Navigation = () => {
                 {item.name}
               </a>
             ))}
-            <div className="pt-4">
-            <GlassButton variant="accent" className="w-full" asChild>
+            <div className="pt-4 space-y-2">
+              <GlassButton variant="ghost" className="w-full" asChild>
+                <a href="/login">Login</a>
+              </GlassButton>
+              <GlassButton variant="accent" className="w-full" asChild>
                 <a href="/register">Register Now</a>
               </GlassButton>
             </div>

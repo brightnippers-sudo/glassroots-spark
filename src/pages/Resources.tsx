@@ -1,6 +1,8 @@
 import { ExternalLink, Download, BookOpen, HelpCircle } from "lucide-react";
 import { GlassCard, GlassCardHeader, GlassCardTitle, GlassCardContent } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
+import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 
 const Resources = () => {
   const quizCategories = [
@@ -150,9 +152,10 @@ const Resources = () => {
                           <Download className="w-4 h-4" />
                           Download
                         </GlassButton>
-                      </div>
-                    </div>
-                  </div>
+        </div>
+      </div>
+      <Footer />
+    </div>
                 </GlassCardContent>
               </GlassCard>
             ))}

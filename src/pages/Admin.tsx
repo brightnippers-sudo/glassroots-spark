@@ -22,6 +22,9 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
 import HeroContentEditor from "@/components/admin/HeroContentEditor";
 import EventsManager from "@/components/admin/EventsManager";
+import SponsorsManager from "@/components/admin/SponsorsManager";
+import ClubControls from "@/components/admin/ClubControls";
+import ResultsPublisher from "@/components/admin/ResultsPublisher";
 
 const AdminKPICard = ({ title, value, icon: Icon, trend }: any) => (
   <GlassCard className="p-6">
@@ -176,6 +179,12 @@ const Admin = () => {
         return <HeroContentEditor />;
       case 'events':
         return <EventsManager />;
+      case 'sponsors':
+        return <SponsorsManager />;
+      case 'club':
+        return <ClubControls />;
+      case 'results':
+        return <ResultsPublisher />;
       default:
         return (
           <div className="flex items-center justify-center h-64">
