@@ -2,17 +2,29 @@ import { useState } from "react"
 import { Menu, X } from "lucide-react"
 import { GlassButton } from "@/components/ui/glass-button"
 import { cn } from "@/lib/utils"
+import { useLocation } from "react-router-dom"
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false)
+  const location = useLocation()
 
   const navItems = [
     { name: "Home", href: "/" },
     { name: "About", href: "/about" },
     { name: "Competitions", href: "/competitions" },
-    { name: "Resources", href: "#resources" },
-    { name: "Results", href: "#results" },
+    { name: "Resources", href: "/resources" },
+    { name: "Results", href: "/results" },
+    { name: "Schools", href: "/schools" },
+    { name: "Club", href: "/club" },
+    { name: "Sponsors", href: "/sponsors" },
+    { name: "Media", href: "/media" },
   ]
+
+  const isActivePage = (href: string) => {
+    if (href === "/" && location.pathname === "/") return true
+    if (href !== "/" && location.pathname.startsWith(href)) return true
+    return false
+  }
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-nav">
@@ -32,7 +44,12 @@ const Navigation = () => {
                 <a
                   key={item.name}
                   href={item.href}
-                  className="text-foreground hover:text-primary transition-colors duration-200 font-medium"
+                  className={cn(
+                    "transition-colors duration-200 font-medium",
+                    isActivePage(item.href)
+                      ? "text-primary border-b-2 border-primary"
+                      : "text-foreground hover:text-primary"
+                  )}
                 >
                   {item.name}
                 </a>
@@ -69,7 +86,12 @@ const Navigation = () => {
               <a
                 key={item.name}
                 href={item.href}
-                className="block px-3 py-2 text-foreground hover:text-primary transition-colors duration-200 font-medium"
+                className={cn(
+                  "block px-3 py-2 transition-colors duration-200 font-medium",
+                  isActivePage(item.href)
+                    ? "text-primary bg-primary/10 rounded-md"
+                    : "text-foreground hover:text-primary"
+                )}
                 onClick={() => setIsOpen(false)}
               >
                 {item.name}

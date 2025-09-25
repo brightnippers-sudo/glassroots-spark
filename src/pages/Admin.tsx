@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
+import HeroContentEditor from "@/components/admin/HeroContentEditor";
+import EventsManager from "@/components/admin/EventsManager";
 
 const AdminKPICard = ({ title, value, icon: Icon, trend }: any) => (
   <GlassCard className="p-6">
@@ -162,43 +164,6 @@ const Dashboard = () => (
   </div>
 );
 
-const EventsManager = () => (
-  <div className="space-y-6">
-    <div className="flex justify-between items-center">
-      <h1 className="text-3xl font-bold text-foreground">Events Manager</h1>
-      <GlassButton variant="primary">
-        <Calendar className="w-4 h-4" />
-        Create Competition
-      </GlassButton>
-    </div>
-
-    <div className="grid gap-4">
-      {[
-        { title: "Scholars Cambridge Maths 2025", stage: "Stage One", status: "Open", type: "Mathematics", region: "Southwest" },
-        { title: "SCMC Science Challenge", stage: "Regional", status: "Closed", type: "Science", region: "North Central" },
-        { title: "Coding Competition Finals", stage: "Finals", status: "Invite-only", type: "Coding", region: "South-South" }
-      ].map((event, index) => (
-        <GlassCard key={index} className="p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">{event.title}</h3>
-              <div className="flex gap-2 mt-2">
-                <span className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-pill">{event.type}</span>
-                <span className="px-2 py-1 bg-secondary/20 text-secondary-orange text-xs rounded-pill">{event.stage}</span>
-                <span className="px-2 py-1 bg-accent/20 text-accent-foreground text-xs rounded-pill">{event.region}</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-2">Virtual Competition • Registration: Mar 1 - Mar 15, 2024</p>
-            </div>
-            <div className="flex gap-2">
-              <GlassButton variant="ghost" size="sm">Edit</GlassButton>
-              <GlassButton variant="secondary" size="sm">View</GlassButton>
-            </div>
-          </div>
-        </GlassCard>
-      ))}
-    </div>
-  </div>
-);
 
 const Admin = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -207,6 +172,8 @@ const Admin = () => {
     switch (activeSection) {
       case 'dashboard':
         return <Dashboard />;
+      case 'hero-editor':
+        return <HeroContentEditor />;
       case 'events':
         return <EventsManager />;
       default:
