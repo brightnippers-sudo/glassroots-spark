@@ -5,6 +5,8 @@ import { GlassButton } from "@/components/ui/glass-button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 
 const Club = () => {
   const [showShareModal, setShowShareModal] = useState(false);
@@ -106,8 +108,9 @@ const Club = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
       {/* Hero Section */}
-      <section className="relative py-16 px-6">
+      <section className="relative py-24 px-6">
         <div className="max-w-6xl mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-6">
             <Trophy className="w-12 h-12 text-secondary-orange" />
@@ -311,6 +314,7 @@ const Club = () => {
           </div>
         </section>
       </div>
+      <Footer />
     </div>
   );
 };

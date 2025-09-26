@@ -32,8 +32,8 @@ const Navigation = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <h1 className="text-xl font-bold text-primary">
-              Scholars Cambridge
+            <h1 className="text-xl font-bold text-secondary-orange">
+              ScholarsNG
             </h1>
           </div>
 
@@ -47,8 +47,8 @@ const Navigation = () => {
                   className={cn(
                     "transition-colors duration-200 font-medium",
                     isActivePage(item.href)
-                      ? "text-primary border-b-2 border-primary"
-                      : "text-foreground hover:text-primary"
+                      ? "text-secondary-orange border-b-2 border-secondary-orange"
+                      : "text-foreground hover:text-secondary-orange"
                   )}
                 >
                   {item.name}
@@ -92,8 +92,8 @@ const Navigation = () => {
                 className={cn(
                   "block px-3 py-2 transition-colors duration-200 font-medium",
                   isActivePage(item.href)
-                    ? "text-primary bg-primary/10 rounded-md"
-                    : "text-foreground hover:text-primary"
+                    ? "text-secondary-orange bg-secondary-orange/10 rounded-md"
+                    : "text-foreground hover:text-secondary-orange"
                 )}
                 onClick={() => setIsOpen(false)}
               >

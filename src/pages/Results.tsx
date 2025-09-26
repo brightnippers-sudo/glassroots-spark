@@ -4,6 +4,8 @@ import { GlassCard, GlassCardHeader, GlassCardTitle, GlassCardContent } from "@/
 import { GlassButton } from "@/components/ui/glass-button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 
 const Results = () => {
   const [selectedCompetition, setSelectedCompetition] = useState("maths-2024");
@@ -106,8 +108,10 @@ const Results = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
+
       {/* Hero Section */}
-      <section className="relative py-16 px-6">
+      <section className="relative py-24 px-6">
         <div className="max-w-6xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
             Results & Leaderboards
@@ -288,6 +292,7 @@ const Results = () => {
           </GlassCard>
         </section>
       </div>
+      <Footer />
     </div>
   );
 };

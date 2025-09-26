@@ -5,6 +5,8 @@ import { GlassButton } from "@/components/ui/glass-button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 
 const Schools = () => {
   const [showCoachModal, setShowCoachModal] = useState(false);
@@ -80,8 +82,10 @@ const Schools = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
+
       {/* Hero Section */}
-      <section className="relative py-16 px-6">
+      <section className="relative py-24 px-6">
         <div className="max-w-6xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
             Schools & Coaches
@@ -271,6 +275,7 @@ const Schools = () => {
           </GlassCard>
         </section>
       </div>
+      <Footer />
     </div>
   );
 };

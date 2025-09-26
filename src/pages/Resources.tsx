@@ -74,6 +74,7 @@ const Resources = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
       {/* Hero Section */}
       <section className="relative py-24 px-6">
         <div className="max-w-6xl mx-auto text-center">
@@ -152,10 +153,9 @@ const Resources = () => {
                           <Download className="w-4 h-4" />
                           Download
                         </GlassButton>
-        </div>
-      </div>
-      <Footer />
-    </div>
+                      </div>
+                    </div>
+                  </div>
                 </GlassCardContent>
               </GlassCard>
             ))}
@@ -213,6 +213,7 @@ const Resources = () => {
           </GlassCard>
         </section>
       </div>
+      <Footer />
     </div>
   );
 };
