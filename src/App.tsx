@@ -16,6 +16,9 @@ import Schools from "./pages/Schools";
 import Club from "./pages/Club";
 import Sponsors from "./pages/Sponsors";
 import Media from "./pages/Media";
+import CoachDashboard from "./pages/CoachDashboard";
+import SponsorDashboard from "./pages/SponsorDashboard";
+import Blog from "./pages/Blog";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +43,9 @@ const App = () => (
           <Route path="/club" element={<Club />} />
           <Route path="/sponsors" element={<Sponsors />} />
           <Route path="/media" element={<Media />} />
+          <Route path="/coach" element={<CoachDashboard />} />
+          <Route path="/sponsor" element={<SponsorDashboard />} />
+          <Route path="/blog" element={<Blog />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
