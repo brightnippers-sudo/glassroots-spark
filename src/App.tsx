@@ -20,6 +20,7 @@ import CoachDashboard from "./pages/CoachDashboard";
 import SponsorDashboard from "./pages/SponsorDashboard";
 import Blog from "./pages/Blog";
 import NotFound from "./pages/NotFound";
+import RegistrationDialog from "./components/RegistrationDialog";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <RegistrationDialog />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />

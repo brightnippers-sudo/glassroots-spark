@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
-import HeroContentEditor from "@/components/admin/HeroContentEditor";
+import HomePageManager from "@/components/admin/homepage/HomePageManager";
 import EventsManager from "@/components/admin/EventsManager";
 import SponsorsManager from "@/components/admin/SponsorsManager";
 import ClubControls from "@/components/admin/ClubControls";
@@ -176,7 +176,7 @@ const Admin = () => {
       case 'dashboard':
         return <Dashboard />;
       case 'hero-editor':
-        return <HeroContentEditor />;
+        return <HomePageManager />;
       case 'events':
         return <EventsManager />;
       case 'sponsors':

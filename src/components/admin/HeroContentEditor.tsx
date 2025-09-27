@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { apiService } from "@/services/apiService"
 import { Save, Eye, History, Upload, Calendar, Wand2 } from "lucide-react"
 import { GlassCard } from "@/components/ui/glass-card"
 import { GlassButton } from "@/components/ui/glass-button"
@@ -12,16 +13,45 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 const HeroContentEditor = () => {
   const [heroData, setHeroData] = useState({
-    headline: "Inspiring excellence across disciplines",
-    subhead: "Join thousands of students in Nigeria's premier academic competition",
-    primaryCTALabel: "Register Now",
-    primaryCTAAction: "register_modal",
-    secondaryCTALabel: "Practice Quizzes",
-    secondaryCTAAction: "quiz_engine",
-    selectedEvent: "maths-2025",
-    seatsLeft: 1250,
-    ctaOverride: "Limited Seats Available"
+    headline: "",
+    subheadline: "",
+    description: "",
+    competition: {
+      stage: "",
+      date: "",
+      location: ""
+    },
+    cta: {
+      primary: {
+        label: "",
+        action: ""
+      },
+      secondary: {
+        label: "",
+        action: ""
+      }
+    },
+    selectedEvent: "",
+    seatsLeft: 0,
+    registrationDeadline: "",
+    ctaOverride: ""
   })
+
+  useEffect(() => {
+    // Load hero content when component mounts
+    const loadHeroContent = async () => {
+      try {
+        const data = await apiService.getHeroContent();
+        if (data && data.content) {
+          setHeroData(JSON.parse(data.content));
+        }
+      } catch (error) {
+        console.error('Error loading hero content:', error);
+      }
+    };
+    
+    loadHeroContent();
+  }, [])
 
   const [manifestoData, setManifestoData] = useState({
     content: "We believe every child deserves the opportunity to excel...",
@@ -40,14 +70,24 @@ const HeroContentEditor = () => {
     { value: "quiz_engine", label: "Quiz Engine Link" }
   ]
 
-  const handleSave = () => {
-    console.log("Saving hero content:", { heroData, manifestoData })
-    // Save logic here
+  const handleSave = async () => {
+    try {
+      await apiService.updateHeroContent(heroData);
+      alert('Hero content saved as draft successfully!');
+    } catch (error) {
+      console.error('Error saving hero content:', error);
+      alert('Error saving hero content. Please try again.');
+    }
   }
 
-  const handlePublish = () => {
-    console.log("Publishing hero content")
-    // Publish logic with confirmation modal
+  const handlePublish = async () => {
+    try {
+      await apiService.updateHeroContent({ ...heroData, is_active: true });
+      alert('Hero content published successfully!');
+    } catch (error) {
+      console.error('Error publishing hero content:', error);
+      alert('Error publishing hero content. Please try again.');
+    }
   }
 
   return (
@@ -102,12 +142,87 @@ const HeroContentEditor = () => {
               </div>
               
               <div>
-                <Label htmlFor="subhead">Subheadline</Label>
+                <Label htmlFor="subheadline">Subheadline</Label>
                 <Input
-                  id="subhead"
-                  value={heroData.subhead}
-                  onChange={(e) => setHeroData({...heroData, subhead: e.target.value})}
+                  id="subheadline"
+                  value={heroData.subheadline}
+                  onChange={(e) => setHeroData({...heroData, subheadline: e.target.value})}
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={heroData.description}
+                  onChange={(e) => setHeroData({...heroData, description: e.target.value})}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="competition-stage">Competition Stage</Label>
+                  <Input
+                    id="competition-stage"
+                    value={heroData.competition.stage}
+                    onChange={(e) => setHeroData({
+                      ...heroData, 
+                      competition: {...heroData.competition, stage: e.target.value}
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="competition-date">Competition Date</Label>
+                  <Input
+                    id="competition-date"
+                    type="date"
+                    value={heroData.competition.date}
+                    onChange={(e) => setHeroData({
+                      ...heroData, 
+                      competition: {...heroData.competition, date: e.target.value}
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="competition-location">Location</Label>
+                  <Input
+                    id="competition-location"
+                    value={heroData.competition.location}
+                    onChange={(e) => setHeroData({
+                      ...heroData, 
+                      competition: {...heroData.competition, location: e.target.value}
+                    })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="registration-deadline">Registration Deadline</Label>
+                  <Input
+                    id="registration-deadline"
+                    type="datetime-local"
+                    value={heroData.registrationDeadline?.slice(0, 16) || ''}
+                    onChange={(e) => setHeroData({
+                      ...heroData,
+                      registrationDeadline: new Date(e.target.value).toISOString()
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="seats-left">Seats Left</Label>
+                  <Input
+                    id="seats-left"
+                    type="number"
+                    min="0"
+                    value={heroData.seatsLeft}
+                    onChange={(e) => setHeroData({
+                      ...heroData,
+                      seatsLeft: parseInt(e.target.value) || 0
+                    })}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -115,15 +230,27 @@ const HeroContentEditor = () => {
                   <Label htmlFor="primary-cta">Primary CTA Label</Label>
                   <Input
                     id="primary-cta"
-                    value={heroData.primaryCTALabel}
-                    onChange={(e) => setHeroData({...heroData, primaryCTALabel: e.target.value})}
+                    value={heroData.cta.primary.label}
+                    onChange={(e) => setHeroData({
+                      ...heroData,
+                      cta: {
+                        ...heroData.cta,
+                        primary: {...heroData.cta.primary, label: e.target.value}
+                      }
+                    })}
                   />
                 </div>
                 <div>
                   <Label htmlFor="primary-action">Primary CTA Action</Label>
                   <Select
-                    value={heroData.primaryCTAAction}
-                    onValueChange={(value) => setHeroData({...heroData, primaryCTAAction: value})}
+                    value={heroData.cta.primary.action}
+                    onValueChange={(value) => setHeroData({
+                      ...heroData,
+                      cta: {
+                        ...heroData.cta,
+                        primary: {...heroData.cta.primary, action: value}
+                      }
+                    })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -144,15 +271,27 @@ const HeroContentEditor = () => {
                   <Label htmlFor="secondary-cta">Secondary CTA Label</Label>
                   <Input
                     id="secondary-cta"
-                    value={heroData.secondaryCTALabel}
-                    onChange={(e) => setHeroData({...heroData, secondaryCTALabel: e.target.value})}
+                    value={heroData.cta.secondary.label}
+                    onChange={(e) => setHeroData({
+                      ...heroData,
+                      cta: {
+                        ...heroData.cta,
+                        secondary: {...heroData.cta.secondary, label: e.target.value}
+                      }
+                    })}
                   />
                 </div>
                 <div>
                   <Label htmlFor="secondary-action">Secondary CTA Action</Label>
                   <Select
-                    value={heroData.secondaryCTAAction}
-                    onValueChange={(value) => setHeroData({...heroData, secondaryCTAAction: value})}
+                    value={heroData.cta.secondary.action}
+                    onValueChange={(value) => setHeroData({
+                      ...heroData,
+                      cta: {
+                        ...heroData.cta,
+                        secondary: {...heroData.cta.secondary, action: value}
+                      }
+                    })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -177,174 +316,6 @@ const HeroContentEditor = () => {
                     Choose File
                   </Button>
                 </div>
-              </div>
-            </div>
-          </GlassCard>
-
-          {/* Competition Selector */}
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Next Competition</h2>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="selected-event">Featured Event</Label>
-                <Select
-                  value={heroData.selectedEvent}
-                  onValueChange={(value) => setHeroData({...heroData, selectedEvent: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {events.map((event) => (
-                      <SelectItem key={event.id} value={event.id}>
-                        {event.title} - Closes {event.closeDate}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="seats-left">Seats Left</Label>
-                  <Input
-                    id="seats-left"
-                    type="number"
-                    value={heroData.seatsLeft}
-                    onChange={(e) => setHeroData({...heroData, seatsLeft: parseInt(e.target.value)})}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cta-override">CTA Text Override</Label>
-                  <Input
-                    id="cta-override"
-                    value={heroData.ctaOverride}
-                    onChange={(e) => setHeroData({...heroData, ctaOverride: e.target.value})}
-                  />
-                </div>
-              </div>
-            </div>
-          </GlassCard>
-
-          {/* Manifesto Editor */}
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Manifesto Editor</h2>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="featured-manifesto"
-                  checked={manifestoData.featured}
-                  onCheckedChange={(checked) => setManifestoData({...manifestoData, featured: checked})}
-                />
-                <Label htmlFor="featured-manifesto">Show full manifesto on About page</Label>
-              </div>
-              
-              <div>
-                <Label htmlFor="manifesto-content">Manifesto Content</Label>
-                <Textarea
-                  id="manifesto-content"
-                  value={manifestoData.content}
-                  onChange={(e) => setManifestoData({...manifestoData, content: e.target.value})}
-                  className="min-h-[200px]"
-                  placeholder="Enter the full manifesto content..."
-                />
-              </div>
-            </div>
-          </GlassCard>
-        </div>
-
-        {/* Preview Column */}
-        <div className="space-y-6">
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Live Preview</h2>
-            
-            {/* Desktop Preview */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-2">Desktop View</h3>
-              <div className="bg-background border rounded-lg p-4 min-h-[300px]">
-                <div className="text-center space-y-4">
-                  <h1 className="text-3xl font-bold">{heroData.headline}</h1>
-                  <p className="text-muted-foreground">{heroData.subhead}</p>
-                  <div className="flex gap-4 justify-center">
-                    <Button>{heroData.primaryCTALabel}</Button>
-                    <Button variant="outline">{heroData.secondaryCTALabel}</Button>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {heroData.ctaOverride} • {heroData.seatsLeft} seats left
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile Preview */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-2">Mobile View</h3>
-              <div className="bg-background border rounded-lg p-4 max-w-sm mx-auto min-h-[200px]">
-                <div className="text-center space-y-3">
-                  <h1 className="text-xl font-bold">{heroData.headline}</h1>
-                  <p className="text-sm text-muted-foreground">{heroData.subhead}</p>
-                  <div className="space-y-2">
-                    <Button size="sm" className="w-full">{heroData.primaryCTALabel}</Button>
-                    <Button variant="outline" size="sm" className="w-full">{heroData.secondaryCTALabel}</Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Countdown Preview */}
-            <div>
-              <h3 className="font-medium mb-2">Countdown Widget</h3>
-              <div className="bg-accent/10 border rounded-lg p-3 text-center">
-                <div className="text-sm font-medium">Registration closes in:</div>
-                <div className="text-lg font-bold">14d 7h 23m 45s</div>
-              </div>
-            </div>
-          </GlassCard>
-
-          {/* Version History */}
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              <History className="w-5 h-5 inline mr-2" />
-              Version History
-            </h2>
-            <div className="space-y-3">
-              {[
-                { version: "v1.4", date: "2025-01-15 14:30", author: "Admin", changes: "Updated hero CTA labels" },
-                { version: "v1.3", date: "2025-01-14 09:15", author: "Admin", changes: "Changed featured event" },
-                { version: "v1.2", date: "2025-01-13 16:45", author: "Admin", changes: "Updated manifesto content" }
-              ].map((version, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-accent/5 rounded-lg">
-                  <div>
-                    <div className="font-medium">{version.version}</div>
-                    <div className="text-sm text-muted-foreground">{version.changes}</div>
-                    <div className="text-xs text-muted-foreground">{version.date} by {version.author}</div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Revert
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-
-          {/* Accessibility Check */}
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              <Wand2 className="w-5 h-5 inline mr-2" />
-              Accessibility Check
-            </h2>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span>Contrast Ratio</span>
-                <span className="text-green-600 font-medium">4.8:1 ✓</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Mobile Legibility</span>
-                <span className="text-green-600 font-medium">Pass ✓</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>CTA Visibility</span>
-                <span className="text-green-600 font-medium">Good ✓</span>
               </div>
             </div>
           </GlassCard>
