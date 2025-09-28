@@ -8,7 +8,7 @@ import Admin from "./pages/Admin";
 import About from "./pages/About";
 import Competitions from "./pages/Competitions";
 import Register from "./pages/Register";
-import Login from "./pages/Login";
+import SimpleLogin from "./pages/SimpleLogin";
 import Dashboard from "./pages/Dashboard";
 import Resources from "./pages/Resources";
 import Results from "./pages/Results";
@@ -37,7 +37,7 @@ const App = () => (
           <Route path="/about" element={<About />} />
           <Route path="/competitions" element={<Competitions />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<SimpleLogin />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/resources" element={<Resources />} />
           <Route path="/results" element={<Results />} />
