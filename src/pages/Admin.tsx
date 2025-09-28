@@ -25,6 +25,8 @@ import EventsManager from "@/components/admin/EventsManager";
 import SponsorsManager from "@/components/admin/SponsorsManager";
 import ClubControls from "@/components/admin/ClubControls";
 import ResultsPublisher from "@/components/admin/ResultsPublisher";
+import StudentManager from "@/components/admin/StudentManager";
+import SchoolsManager from "@/components/admin/SchoolsManager";
 
 const AdminKPICard = ({ title, value, icon: Icon, trend }: any) => (
   <GlassCard className="p-6">
@@ -45,6 +47,8 @@ const AdminSidebar = ({ activeSection, setActiveSection }: any) => {
     { id: 'hero-editor', label: 'Hero/Content Editor', icon: FileText },
     { id: 'sponsors', label: 'Sponsors Manager', icon: Award },
     { id: 'events', label: 'Events Manager', icon: Calendar },
+    { id: 'students', label: 'Student Manager', icon: Users },
+    { id: 'schools', label: 'Schools Manager', icon: School },
     { id: 'registrations', label: 'Registrations & Contacts', icon: Users },
     { id: 'payments', label: 'Payments Ledger', icon: CreditCard },
     { id: 'resources', label: 'Resources Manager', icon: BookOpen },
@@ -179,6 +183,10 @@ const Admin = () => {
         return <HomePageManager />;
       case 'events':
         return <EventsManager />;
+      case 'students':
+        return <StudentManager />;
+      case 'schools':
+        return <SchoolsManager />;
       case 'sponsors':
         return <SponsorsManager />;
       case 'club':
