@@ -186,5 +186,41 @@ export const apiService = {
             method: 'DELETE'
         });
         return handleResponse(response);
+    },
+
+    // Student Profile
+    getStudentProfile: async (studentId: string) => {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/students/${studentId}/profile`, {
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'include'
+        });
+        return handleResponse(response);
+    },
+
+    updateProfilePhoto: async (studentId: string, photoFile: File) => {
+        const formData = new FormData();
+        formData.append('photo', photoFile);
+
+        const response = await fetchWithTimeout(`${API_BASE_URL}/students/${studentId}/profile/photo`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+        });
+        return handleResponse(response);
+    },
+
+    updateStudentProfile: async (studentId: string, profileData: any) => {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/students/${studentId}/profile`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify(profileData)
+        });
+        return handleResponse(response);
     }
 };

@@ -2,6 +2,7 @@ import Navigation from "@/components/Navigation"
 import Hero from "@/components/Hero"
 import ConversionSection from "@/components/ConversionSection"
 import HowItWorks from "@/components/HowItWorks"
+import TestimonialsSection from "@/components/TestimonialsSection"
 import Footer from "@/components/Footer"
 
 const Index = () => {
@@ -10,6 +11,7 @@ const Index = () => {
       <Navigation />
       <Hero />
       <ConversionSection />
+      <TestimonialsSection />
       <HowItWorks />
       <Footer />
     </div>

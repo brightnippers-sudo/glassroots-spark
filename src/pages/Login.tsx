@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Eye, EyeOff, Mail, Lock, User, Phone } from "lucide-react";
+import { useState, FormEvent } from "react";
+import { Eye, EyeOff, Mail, Lock, User, Phone, Loader2 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
 import { Input } from "@/components/ui/input";
@@ -7,10 +7,88 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { useAuth } from "@/stores/auth";
+import { useToast } from "@/components/ui/use-toast";
+import { useNavigate } from "react-router-dom";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  // Login form state
+  const [loginData, setLoginData] = useState({
+    email: '',
+    password: ''
+  });
+
+  // Signup form state
+  const [signupData, setSignupData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+    acceptTerms: false
+  });
+
+  const { login, signup, loginWithGoogle, loginWithMicrosoft, isLoading, error, clearError } = useAuth();
+
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      await login(loginData.email, loginData.password, rememberMe);
+      navigate('/dashboard');
+    } catch (error) {
+      toast({
+        title: "Login Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSignup = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (signupData.password !== signupData.confirmPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Passwords do not match",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!signupData.acceptTerms) {
+      toast({
+        title: "Validation Error",
+        description: "Please accept the terms and conditions",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      await signup({
+        firstName: signupData.firstName,
+        lastName: signupData.lastName,
+        email: signupData.email,
+        phone: signupData.phone,
+        password: signupData.password
+      });
+      navigate('/dashboard');
+    } catch (error) {
+      toast({
+        title: "Registration Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,186 +109,280 @@ const Login = () => {
               </TabsList>
 
               <TabsContent value="login" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="your.email@example.com"
-                      className="pl-10 glass-card border-white/10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="password" 
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
-                      className="pl-10 pr-10 glass-card border-white/10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center space-x-2 text-sm">
-                    <input type="checkbox" className="rounded border-white/20 bg-transparent" />
-                    <span className="text-muted-foreground">Remember me</span>
-                  </label>
-                  <button className="text-sm text-primary hover:underline">
-                    Forgot password?
-                  </button>
-                </div>
-
-                <GlassButton type="submit" className="w-full" variant="primary">
-                  Sign In
-                </GlassButton>
-
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Don't have an account?{" "}
-                    <button className="text-primary hover:underline">
-                      Sign up here
-                    </button>
-                  </p>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="signup" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
+                    <Label htmlFor="email">Email Address</Label>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input 
-                        id="firstName" 
-                        placeholder="John"
+                        id="email" 
+                        type="email" 
+                        placeholder="your.email@example.com"
                         className="pl-10 glass-card border-white/10"
+                        value={loginData.email}
+                        onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                        required
                       />
                     </div>
                   </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input 
-                      id="lastName" 
-                      placeholder="Doe"
-                      className="glass-card border-white/10"
-                    />
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="password" 
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        className="pl-10 pr-10 glass-card border-white/10"
+                        value={loginData.password}
+                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="signupEmail">Email Address</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="signupEmail" 
-                      type="email" 
-                      placeholder="your.email@example.com"
-                      className="pl-10 glass-card border-white/10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="phone" 
-                      type="tel" 
-                      placeholder="+234 xxx xxx xxxx"
-                      className="pl-10 glass-card border-white/10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signupPassword">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="signupPassword" 
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Create a strong password"
-                      className="pl-10 pr-10 glass-card border-white/10"
-                    />
-                    <button
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center space-x-2 text-sm">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-white/20 bg-transparent"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                      />
+                      <span className="text-muted-foreground">Remember me</span>
+                    </label>
+                    <button 
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                      onClick={() => navigate('/forgot-password')}
+                      className="text-sm text-primary hover:underline"
                     >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      )}
+                      Forgot password?
                     </button>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="confirmPassword" 
-                      type={showConfirmPassword ? "text" : "password"}
-                      placeholder="Confirm your password"
-                      className="pl-10 pr-10 glass-card border-white/10"
+                  <GlassButton 
+                    type="submit" 
+                    className="w-full" 
+                    variant="primary"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      'Sign In'
+                    )}
+                  </GlassButton>
+
+                  {error && (
+                    <p className="text-sm text-destructive text-center">{error}</p>
+                  )}
+
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Don't have an account?{" "}
+                      <button 
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => {
+                          clearError();
+                          (document.querySelector('[data-value="signup"]') as HTMLButtonElement)?.click();
+                        }}
+                      >
+                        Sign up here
+                      </button>
+                    </p>
+                  </div>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="signup" className="space-y-4">
+                <form onSubmit={handleSignup} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name</Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          id="firstName" 
+                          placeholder="John"
+                          className="pl-10 glass-card border-white/10"
+                          value={signupData.firstName}
+                          onChange={(e) => setSignupData({ ...signupData, firstName: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input 
+                        id="lastName" 
+                        placeholder="Doe"
+                        className="glass-card border-white/10"
+                        value={signupData.lastName}
+                        onChange={(e) => setSignupData({ ...signupData, lastName: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signupEmail">Email Address</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="signupEmail" 
+                        type="email" 
+                        placeholder="your.email@example.com"
+                        className="pl-10 glass-card border-white/10"
+                        value={signupData.email}
+                        onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="phone" 
+                        type="tel" 
+                        placeholder="+234 xxx xxx xxxx"
+                        className="pl-10 glass-card border-white/10"
+                        value={signupData.phone}
+                        onChange={(e) => setSignupData({ ...signupData, phone: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signupPassword">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="signupPassword" 
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a strong password"
+                        className="pl-10 pr-10 glass-card border-white/10"
+                        value={signupData.password}
+                        onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
+                        required
+                        minLength={8}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        id="confirmPassword" 
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm your password"
+                        className="pl-10 pr-10 glass-card border-white/10"
+                        value={signupData.confirmPassword}
+                        onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-white/20 bg-transparent"
+                      checked={signupData.acceptTerms}
+                      onChange={(e) => setSignupData({ ...signupData, acceptTerms: e.target.checked })}
+                      required
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2"
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </button>
+                    <span className="text-sm text-muted-foreground">
+                      I agree to the{" "}
+                      <button type="button" className="text-primary hover:underline" onClick={() => window.open('/terms', '_blank')}>
+                        Terms of Service
+                      </button>
+                      {" "}and{" "}
+                      <button type="button" className="text-primary hover:underline" onClick={() => window.open('/privacy', '_blank')}>
+                        Privacy Policy
+                      </button>
+                    </span>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-2">
-                  <input type="checkbox" className="rounded border-white/20 bg-transparent" />
-                  <span className="text-sm text-muted-foreground">
-                    I agree to the{" "}
-                    <button className="text-primary hover:underline">Terms of Service</button>
-                    {" "}and{" "}
-                    <button className="text-primary hover:underline">Privacy Policy</button>
-                  </span>
-                </div>
+                  <GlassButton 
+                    type="submit" 
+                    className="w-full" 
+                    variant="primary"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creating Account...
+                      </>
+                    ) : (
+                      'Create Account'
+                    )}
+                  </GlassButton>
 
-                <GlassButton type="submit" className="w-full" variant="primary">
-                  Create Account
-                </GlassButton>
+                  {error && (
+                    <p className="text-sm text-destructive text-center">{error}</p>
+                  )}
 
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Already have an account?{" "}
-                    <button className="text-primary hover:underline">
-                      Sign in here
-                    </button>
-                  </p>
-                </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Already have an account?{" "}
+                      <button 
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => {
+                          clearError();
+                          (document.querySelector('[data-value="login"]') as HTMLButtonElement)?.click();
+                        }}
+                      >
+                        Sign in here
+                      </button>
+                    </p>
+                  </div>
+                </form>
               </TabsContent>
             </Tabs>
 
@@ -218,11 +390,53 @@ const Login = () => {
               <div className="text-center">
                 <p className="text-xs text-muted-foreground mb-4">Or continue with</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <GlassButton variant="ghost" size="sm" className="w-full">
-                    Google
+                  <GlassButton 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={async () => {
+                      try {
+                        await loginWithGoogle();
+                        navigate('/dashboard');
+                      } catch (error) {
+                        toast({
+                          title: "Google Login Failed",
+                          description: error.message,
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Google'
+                    )}
                   </GlassButton>
-                  <GlassButton variant="ghost" size="sm" className="w-full">
-                    Microsoft
+                  <GlassButton 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={async () => {
+                      try {
+                        await loginWithMicrosoft();
+                        navigate('/dashboard');
+                      } catch (error) {
+                        toast({
+                          title: "Microsoft Login Failed",
+                          description: error.message,
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Microsoft'
+                    )}
                   </GlassButton>
                 </div>
               </div>

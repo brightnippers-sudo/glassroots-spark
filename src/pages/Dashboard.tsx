@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   User, 
   Trophy, 
@@ -11,7 +11,8 @@ import {
   ExternalLink,
   Star,
   Users,
-  Calendar
+  Calendar,
+  Loader2
 } from "lucide-react";
 import { GlassCard, GlassCardHeader, GlassCardTitle, GlassCardContent } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
@@ -19,17 +20,46 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { apiService } from "@/services/apiService";
+import { useToast } from "@/components/ui/use-toast";
 
 const Dashboard = () => {
   const [selectedRegistration, setSelectedRegistration] = useState("reg-1");
+  const [loading, setLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  // Mock data
-  const participant = {
-    name: "Sarah Johnson",
-    id: "SCMC2024001",
+  // State for participant data
+  const [participant, setParticipant] = useState({
+    name: "",
+    id: "",
     photo: "/placeholder.svg",
-    tier: "Bronze"
-  };
+    tier: ""
+  });
+
+  // Load profile data
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const response = await apiService.getStudentProfile(participant.id || "current");
+        if (response.success && response.data) {
+          setParticipant(response.data);
+        }
+      } catch (error) {
+        console.error("Error loading profile:", error);
+        toast({
+          title: "Error",
+          description: "Could not load profile data. Please try again later.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
 
   const registrations = [
     { id: "reg-1", title: "Scholars Cambridge Maths 2025", status: "Confirmed", date: "Mar 15, 2024" },
@@ -62,14 +92,61 @@ const Dashboard = () => {
         <div className="glass-card p-8">
           <div className="flex items-center gap-6">
             <div className="relative">
-              <img 
-                src={participant.photo} 
-                alt={participant.name}
-                className="w-20 h-20 rounded-full object-cover border-2 border-white/20"
-              />
-              <button className="absolute -bottom-1 -right-1 glass-card p-2 rounded-full">
-                <Camera className="w-4 h-4 text-foreground" />
-              </button>
+              {loading ? (
+                <div className="w-20 h-20 rounded-full bg-background/50 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  <img 
+                    src={participant.photo} 
+                    alt={participant.name}
+                    className="w-20 h-20 rounded-full object-cover border-2 border-white/20"
+                  />
+                  <input 
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      try {
+                        setUploadingPhoto(true);
+                        const response = await apiService.updateProfilePhoto(participant.id, file);
+                        if (response.success && response.data?.photo) {
+                          setParticipant(prev => ({ ...prev, photo: response.data.photo }));
+                          toast({
+                            title: "Success",
+                            description: "Profile photo updated successfully",
+                          });
+                        }
+                      } catch (error) {
+                        console.error("Error uploading photo:", error);
+                        toast({
+                          title: "Error",
+                          description: "Could not upload photo. Please try again.",
+                          variant: "destructive"
+                        });
+                      } finally {
+                        setUploadingPhoto(false);
+                      }
+                    }}
+                  />
+                  <button 
+                    className="absolute -bottom-1 -right-1 glass-card p-2 rounded-full disabled:opacity-50"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                  >
+                    {uploadingPhoto ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-foreground" />
+                    ) : (
+                      <Camera className="w-4 h-4 text-foreground" />
+                    )}
+                  </button>
+                </>
+              )}
             </div>
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-foreground">{participant.name}</h1>
