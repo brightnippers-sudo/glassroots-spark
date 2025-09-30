@@ -23,11 +23,13 @@ import Footer from "@/components/Footer";
 import { apiService } from "@/services/apiService";
 import { authService } from "@/services/authService";
 import { useToast } from "@/components/ui/use-toast";
+import ProfileEditor from "@/components/ProfileEditor";
 
 const Dashboard = () => {
   const [selectedRegistration, setSelectedRegistration] = useState("reg-1");
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showProfileEditor, setShowProfileEditor] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -115,6 +117,39 @@ const Dashboard = () => {
 
     loadDashboardData();
   }, []);
+
+  const handleProfileSave = async (profileData: any) => {
+    try {
+      // Here you would typically call an API to save the profile
+      console.log('Saving profile:', profileData);
+      
+      // Update local state with new profile data
+      setParticipant(prev => ({
+        ...prev,
+        first_name: profileData.firstName,
+        last_name: profileData.lastName,
+        name: `${profileData.firstName} ${profileData.lastName}`,
+        school: profileData.school,
+        grade: profileData.grade,
+        // Add other fields as needed
+      }));
+
+      // If there's a photo, handle the upload
+      if (profileData.photo) {
+        const response = await apiService.updateStudentPhoto(profileData.photo);
+        if (response.success && response.photo_url) {
+          setParticipant(prev => ({ 
+            ...prev, 
+            photo: response.photo_url,
+            photo_url: response.photo_url 
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      throw error; // Re-throw to let ProfileEditor handle the error
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -399,7 +434,12 @@ const Dashboard = () => {
                 </GlassCardTitle>
               </GlassCardHeader>
               <GlassCardContent className="space-y-2">
-                <GlassButton variant="ghost" size="sm" className="w-full justify-start">
+                <GlassButton 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full justify-start"
+                  onClick={() => setShowProfileEditor(true)}
+                >
                   <User className="w-4 h-4" />
                   Edit Profile
                 </GlassButton>
@@ -427,9 +467,28 @@ const Dashboard = () => {
               </GlassCardContent>
             </GlassCard>
           </div>
+          </div>
         </div>
       </div>
-      </div>
+      
+      {/* Profile Editor Modal */}
+      <ProfileEditor
+        isOpen={showProfileEditor}
+        onClose={() => setShowProfileEditor(false)}
+        currentProfile={{
+          firstName: participant.first_name,
+          lastName: participant.last_name,
+          school: participant.school,
+          grade: participant.grade,
+          phone: '', // Add phone field to participant state if needed
+          interests: participant.interests,
+          achievements: participant.achievements,
+          photo_url: participant.photo_url,
+          tier: participant.tier
+        }}
+        onSave={handleProfileSave}
+      />
+      
       <Footer />
     </div>
   );
