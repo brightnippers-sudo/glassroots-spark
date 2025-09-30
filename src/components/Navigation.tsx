@@ -40,8 +40,8 @@ const Navigation = () => {
           { name: "Sponsor Dashboard", href: "/sponsor", description: "Track your impact" },
           { name: "Logout", href: "/logout", description: "Sign out of your account" },
         ] : [
-          { name: "Login", href: "/login", description: "Sign into your account" },
-          { name: "Register", href: "/register", description: "Create a new account" },
+          { name: "Login", href: "/login", description: "Sign up or Sign into your account" },
+          { name: "Register", href: "/register", description: "Register for a Competition" },
         ]
       }
     },

@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { apiService } from "@/services/apiService";
+import { authService } from "@/services/authService";
 import { useToast } from "@/components/ui/use-toast";
 
 const Dashboard = () => {
@@ -30,27 +31,81 @@ const Dashboard = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  // State for participant data
   const [participant, setParticipant] = useState({
     name: "",
     id: "",
     photo: "/placeholder.svg",
-    tier: ""
+    tier: "",
+    school: "",
+    grade: "",
+    interests: "",
+    achievements: "",
+    first_name: "",
+    last_name: "",
+    photo_url: "",
+    points: 0,
+    registrations: 0,
+    competitions_won: 0
   });
-
-  // Load profile data
+  const [registrations, setRegistrations] = useState([]);
+  const [certificates, setCertificates] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [clubStats, setClubStats] = useState({
+    referrals: 0,
+    battles: 0,
+    totalNeeded: 50,
+    nextTier: "Silver"
+  });
+  const [recentActivity, setRecentActivity] = useState<{ 
+    message: string, 
+    time: string, 
+    type?: string 
+  }[]>([]);
   useEffect(() => {
-    const loadProfile = async () => {
+    const loadDashboardData = async () => {
       try {
-        const response = await apiService.getStudentProfile(participant.id || "current");
-        if (response.success && response.data) {
-          setParticipant(response.data);
-        }
+        // Fetch profile directly (no nested .profile)
+        const profile = await authService.getCurrentUser();
+
+        setParticipant(prev => ({
+          ...prev,
+          id: profile.id,
+          name: `${profile.first_name} ${profile.last_name}`,
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          tier: profile.tier || 'Basic',
+          photo: profile.photo_url || '/placeholder.svg',
+          photo_url: profile.photo_url || '/placeholder.svg',
+          school: profile.school || '',
+          grade: profile.grade || '',
+          interests: profile.interests || '',
+          achievements: profile.achievements || '',
+          points: profile.points || 0,
+          registrations: profile.registrations || 0,
+          competitions_won: profile.competitions_won || 0,
+          participant_code: profile.participant_code || ''
+        }));
+
+        // Fetch other dashboard data in parallel
+        const [registrationsResponse, certificatesResponse, invoicesResponse, clubStatsResponse, activityResponse] = await Promise.all([
+          apiService.getStudentRegistrations(),
+          apiService.getStudentCertificates(),
+          apiService.getStudentInvoices(),
+          apiService.getStudentClubStats(),
+          apiService.getStudentActivity()
+        ]);
+
+        if (registrationsResponse.success) setRegistrations(registrationsResponse.registrations || []);
+        if (certificatesResponse.success) setCertificates(certificatesResponse.certificates || []);
+        if (invoicesResponse.success) setInvoices(invoicesResponse.invoices || []);
+        if (clubStatsResponse.success) setClubStats(prev => ({ ...prev, ...clubStatsResponse.stats }));
+        if (activityResponse.success) setRecentActivity(activityResponse.activities || []);
+
       } catch (error) {
-        console.error("Error loading profile:", error);
+        console.error("Error loading dashboard data:", error);
         toast({
           title: "Error",
-          description: "Could not load profile data. Please try again later.",
+          description: "Could not load some dashboard data. Please try again later.",
           variant: "destructive"
         });
       } finally {
@@ -58,105 +113,81 @@ const Dashboard = () => {
       }
     };
 
-    loadProfile();
+    loadDashboardData();
   }, []);
-
-  const registrations = [
-    { id: "reg-1", title: "Scholars Cambridge Maths 2025", status: "Confirmed", date: "Mar 15, 2024" },
-    { id: "reg-2", title: "SCMC Science Challenge", status: "Pending Payment", date: "Apr 20, 2024" }
-  ];
-
-  const clubStats = {
-    referrals: 12,
-    battles: 38,
-    totalNeeded: 50,
-    nextTier: "Silver"
-  };
-
-  const certificates = [
-    { title: "Mathematics Excellence 2024", date: "Jan 2024", url: "#" },
-    { title: "Science Achievement 2023", date: "Dec 2023", url: "#" }
-  ];
-
-  const invoices = [
-    { id: "INV-001", amount: "₦15,000", status: "Paid", date: "Feb 2024" },
-    { id: "INV-002", amount: "₦12,000", status: "Pending", date: "Mar 2024" }
-  ];
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
       <div className="pt-20 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="glass-card p-8">
-          <div className="flex items-center gap-6">
-            <div className="relative">
-              {loading ? (
-                <div className="w-20 h-20 rounded-full bg-background/50 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <>
-                  <img 
-                    src={participant.photo} 
-                    alt={participant.name}
-                    className="w-20 h-20 rounded-full object-cover border-2 border-white/20"
-                  />
-                  <input 
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Header */}
+          <div className="glass-card p-8">
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                {loading ? (
+                  <div className="w-20 h-20 rounded-full bg-background/50 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    <img 
+                      src={participant.photo} 
+                      alt={participant.name}
+                      className="w-20 h-20 rounded-full object-cover border-2 border-white/20"
+                    />
+                    <input 
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
 
-                      try {
-                        setUploadingPhoto(true);
-                        const response = await apiService.updateProfilePhoto(participant.id, file);
-                        if (response.success && response.data?.photo) {
-                          setParticipant(prev => ({ ...prev, photo: response.data.photo }));
-                          toast({
-                            title: "Success",
-                            description: "Profile photo updated successfully",
-                          });
+                        try {
+                          setUploadingPhoto(true);
+                          const response = await apiService.updateStudentPhoto(file);
+                          if (response.success && response.photo_url) {
+                            setParticipant(prev => ({ ...prev, photo: response.photo_url }));
+                            toast({ title: "Success", description: "Profile photo updated successfully" });
+                          }
+                        } catch (error) {
+                          console.error("Error uploading photo:", error);
+                          toast({ title: "Error", description: "Could not upload photo. Please try again.", variant: "destructive" });
+                        } finally {
+                          setUploadingPhoto(false);
                         }
-                      } catch (error) {
-                        console.error("Error uploading photo:", error);
-                        toast({
-                          title: "Error",
-                          description: "Could not upload photo. Please try again.",
-                          variant: "destructive"
-                        });
-                      } finally {
-                        setUploadingPhoto(false);
-                      }
-                    }}
-                  />
-                  <button 
-                    className="absolute -bottom-1 -right-1 glass-card p-2 rounded-full disabled:opacity-50"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingPhoto}
-                  >
-                    {uploadingPhoto ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-foreground" />
-                    ) : (
-                      <Camera className="w-4 h-4 text-foreground" />
-                    )}
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-foreground">{participant.name}</h1>
-              <p className="text-muted-foreground">Participant ID: {participant.id}</p>
-              <Badge className="mt-2 bg-secondary-orange/20 text-secondary-orange">
-                {participant.tier} Member
-              </Badge>
+                      }}
+                    />
+                    <button 
+                      className="absolute -bottom-1 -right-1 glass-card p-2 rounded-full disabled:opacity-50"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                    >
+                      {uploadingPhoto ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-foreground" />
+                      ) : (
+                        <Camera className="w-4 h-4 text-foreground" />
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="flex-1">
+                <h1 className="text-3xl font-bold text-foreground">
+                  {participant.name || 'No Name Loaded'}
+                </h1>
+                <p className="text-muted-foreground">Participant ID: {participant.participant_code}</p>
+                <Badge className="mt-2 bg-secondary-orange/20 text-secondary-orange">
+                  {participant.tier} Member
+                </Badge>
+              </div>
             </div>
           </div>
-        </div>
+
+          {/* ...rest of the dashboard (registrations, club stats, activity, sidebar) unchanged */}
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
@@ -176,7 +207,9 @@ const Dashboard = () => {
                   className="w-full glass-card border border-white/10 rounded-base p-3 bg-transparent text-foreground"
                 >
                   {registrations.map(reg => (
-                    <option key={reg.id} value={reg.id}>{reg.title}</option>
+                    <option key={reg.id} value={reg.id}>
+                      {reg.competition_name} — {reg.status}
+                    </option>
                   ))}
                 </select>
                 
@@ -184,21 +217,35 @@ const Dashboard = () => {
                   <div key={reg.id} className="glass p-4 rounded-base">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-semibold text-foreground">{reg.title}</h3>
+                        <h3 className="font-semibold text-foreground">{reg.competition_name}</h3>
                         <p className="text-sm text-muted-foreground">Competition Date: {reg.date}</p>
-                        <Badge className={`mt-2 ${reg.status === 'Confirmed' ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
+                        <Badge className={`mt-2 ${reg.status === 'Confirmed' ? 'bg-success/20 text-success' : reg.status === 'Pending Payment' ? 'bg-secondary-orange/20 text-secondary-orange' : 'bg-muted/20 text-muted-foreground'}`}>
                           {reg.status}
                         </Badge>
                       </div>
-                      <GlassButton variant="ghost" size="sm">
-                        <Download className="w-4 h-4" />
-                        Entry Slip
-                      </GlassButton>
+
+                      <div className="flex space-x-2">
+                        {reg.status === "Confirmed" && reg.receipt_path && (
+                          <GlassButton variant="ghost" size="sm" onClick={() => downloadReceipt(reg.receipt_path)}>
+                            <Download className="w-4 h-4" />
+                            Download Receipt
+                          </GlassButton>
+                        )}
+                        
+                      <div className="flex space-x-2"></div>
+                        {reg.status === "Pending Payment" && (
+                          <GlassButton variant="ghost" size="sm" onClick={() => handlePayment(reg.id)}>
+                            <CreditCard className="w-4 h-4" />
+                            Pay Now
+                          </GlassButton>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
               </GlassCardContent>
             </GlassCard>
+
 
             {/* Smarter Than 20 Club */}
             <GlassCard>
@@ -244,13 +291,30 @@ const Dashboard = () => {
                 </GlassCardTitle>
               </GlassCardHeader>
               <GlassCardContent className="space-y-3">
-                {[
-                  { message: "Registration confirmed for Maths Competition", time: "2 hours ago", type: "success" },
-                  { message: "Certificate generated for Science Challenge", time: "1 day ago", type: "info" },
-                  { message: "Payment reminder sent", time: "3 days ago", type: "warning" }
-                ].map((activity, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 glass rounded-base">
-                    <span className="text-sm text-foreground">{activity.message}</span>
+                {recentActivity.map((activity, index) => (
+                  <div
+                    key={index}
+                    className="flex justify-between items-center p-3 glass rounded-base"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-foreground">{activity.message}</span>
+
+                      {/* Optional type badge */}
+                      {activity.type && (
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded ${
+                            activity.type === "payment_completed"
+                              ? "bg-green-500/20 text-green-600"
+                              : activity.type === "registration_created"
+                              ? "bg-blue-500/20 text-blue-600"
+                              : "bg-muted/20 text-muted-foreground"
+                          }`}
+                        >
+                          {activity.type.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
+
                     <span className="text-xs text-muted-foreground">{activity.time}</span>
                   </div>
                 ))}
@@ -282,7 +346,7 @@ const Dashboard = () => {
               </GlassCardContent>
             </GlassCard>
 
-            {/* Invoices & Payments */}
+            {/* Payments */}
             <GlassCard>
               <GlassCardHeader>
                 <GlassCardTitle className="flex items-center gap-2">
@@ -291,24 +355,40 @@ const Dashboard = () => {
                 </GlassCardTitle>
               </GlassCardHeader>
               <GlassCardContent className="space-y-3">
-                {invoices.map((invoice, index) => (
-                  <div key={index} className="glass p-3 rounded-base">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium text-foreground text-sm">{invoice.id}</h4>
-                        <p className="text-xs text-muted-foreground">{invoice.date}</p>
-                        <p className="font-semibold text-primary">{invoice.amount}</p>
+                {invoices
+                  .filter(inv => inv.status === "completed") // ✅ Only show completed
+                  .map((inv, index) => (
+                    <div key={index} className="glass p-3 rounded-base">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-foreground text-sm">
+                            Invoice #{inv.id}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">{inv.created_at}</p>
+                          <p className="font-semibold text-primary">{inv.amount}</p>
+
+                          {/* Status Badge */}
+                          <Badge className="mt-2 bg-success/20 text-success">
+                            Completed
+                          </Badge>
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <GlassButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => downloadReceipt(inv.id)}
+                          >
+                            <Download className="w-4 h-4" />
+                            Download Receipt
+                          </GlassButton>
+                        </div>
                       </div>
-                      {invoice.status === 'Pending' && (
-                        <GlassButton variant="accent" size="sm">
-                          Pay Now
-                        </GlassButton>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  ))}
               </GlassCardContent>
             </GlassCard>
+
 
             {/* Quick Actions */}
             <GlassCard>
@@ -330,6 +410,19 @@ const Dashboard = () => {
                 <GlassButton variant="ghost" size="sm" className="w-full justify-start">
                   <ExternalLink className="w-4 h-4" />
                   Contact Support
+                </GlassButton>
+                <GlassButton variant="ghost" size="sm" className="w-full justify-start"
+                  onClick={async () => {
+                    try {
+                      await authService.logout(); // or your logout function
+                      window.location.href = "/login"; // redirect to login page
+                    } catch (error) {
+                      console.error("Logout failed:", error);
+                    }
+                  }}
+                >
+                  <User className="w-4 h-4" />
+                  Logout
                 </GlassButton>
               </GlassCardContent>
             </GlassCard>

@@ -1,28 +1,32 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { apiService } from '../services/apiService'
 
 interface AuthState {
   user: {
     id: string
-    name: string
+    first_name: string
+    last_name: string
     email: string
-    photo?: string
+    photo_url?: string
     tier: string
+    role: 'participant' | 'coach' | 'sponsor' | 'admin'
+    status: string
   } | null
   sessionId: string | null
   isLoading: boolean
   error: string | null
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   register: (formData: any) => Promise<void>
-  loginWithGoogle: () => Promise<void>
-  loginWithMicrosoft: () => Promise<void>
+  loginWithGoogle: (token: string) => Promise<void>
+  loginWithMicrosoft: (token: string) => Promise<void>
   logout: () => void
   clearError: () => void
 }
 
 export const useAuth = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       sessionId: null,
       isLoading: false,
@@ -31,119 +35,97 @@ export const useAuth = create<AuthState>()(
       login: async (email: string, password: string) => {
         try {
           set({ isLoading: true, error: null })
-          const response = await fetch('https://scholars.ng/api.php/auth/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include', // This is important for cookies
-            body: JSON.stringify({ email, password }),
-          })
 
-          const data = await response.json()
-          if (!response.ok) {
-            throw new Error(data.error || 'Login failed')
+          const result = await apiService.login(email.trim().toLowerCase(), password)
+
+          if (!result?.user) {
+            throw new Error('Login successful but no user data received')
           }
 
           set({
-            user: data.user,
-            sessionId: data.sessionId,
+            user: result.user,
+            sessionId: result.sessionId || result.session_id || null,
             isLoading: false,
           })
-        } catch (error) {
-          set({ error: error.message, isLoading: false })
-          throw error
+
+          return result
+        } catch (err: any) {
+          const message = err?.message || 'An unexpected error occurred'
+          console.error('Login error:', message)
+          set({ error: message, isLoading: false })
+          throw new Error(message)
         }
       },
 
       register: async (formData) => {
         try {
           set({ isLoading: true, error: null })
-          const response = await fetch('https://scholars.ng/api.php/auth/register', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify(formData),
+          const result = await apiService.register({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email.trim().toLowerCase(),
+            password: formData.password,
+            phone: formData.phone,
+            userType: formData.userType,
           })
 
-          const data = await response.json()
-          if (!response.ok) {
-            throw new Error(data.error || 'Registration failed')
-          }
-
-          // Auto-login after successful registration
-          set({
-            user: data.user,
-            sessionId: data.sessionId,
-            isLoading: false,
-          })
-        } catch (error) {
-          set({ error: error.message, isLoading: false })
-          throw error
+          set({ isLoading: false })
+          return result
+        } catch (err: any) {
+          const message = err?.message || 'Registration failed'
+          console.error('Registration error:', message)
+          set({ error: message, isLoading: false })
+          throw new Error(message)
         }
       },
 
-      logout: () => {
-        set({ user: null, sessionId: null })
+      logout: async () => {
+        try {
+          await apiService.logout()
+        } finally {
+          set({ user: null, sessionId: null })
+        }
       },
 
       clearError: () => {
         set({ error: null })
       },
 
-      loginWithGoogle: async () => {
+      loginWithGoogle: async (token: string) => {
         try {
-          set({ isLoading: true, error: null });
-          const response = await fetch('https://scholars.ng/api.php/auth/google', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include'
-          });
+          set({ isLoading: true, error: null })
+          const result = await apiService.googleLogin(token)
 
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || 'Google login failed');
-          }
+          if (!result?.user) throw new Error('Google login failed')
 
           set({
-            user: data.user,
-            sessionId: data.sessionId,
+            user: result.user,
+            sessionId: result.sessionId || null,
             isLoading: false,
-          });
-        } catch (error) {
-          set({ error: error.message, isLoading: false });
-          throw error;
+          })
+        } catch (err: any) {
+          const message = err?.message || 'Google login failed'
+          set({ error: message, isLoading: false })
+          throw new Error(message)
         }
       },
 
-      loginWithMicrosoft: async () => {
+      loginWithMicrosoft: async (token: string) => {
         try {
-          set({ isLoading: true, error: null });
-          const response = await fetch('https://scholars.ng/api.php/auth/microsoft', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include'
-          });
+          set({ isLoading: true, error: null })
+          const result = await apiService.microsoftLogin(token)
 
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || 'Microsoft login failed');
-          }
+          if (!result?.user) throw new Error('Microsoft login failed')
 
           set({
-            user: data.user,
-            sessionId: data.sessionId,
+            user: result.user,
+            sessionId: result.sessionId || null,
             isLoading: false,
-          });
-        } catch (error) {
-          set({ error: error.message, isLoading: false });
-          throw error;
+          })
+        } catch (err: any) {
+          const message = err?.message || 'Microsoft login failed'
+          set({ error: message, isLoading: false })
+          throw new Error(message)
         }
       },
     }),

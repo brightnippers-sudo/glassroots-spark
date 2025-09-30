@@ -45,10 +45,10 @@ const AdminSidebar = ({ activeSection, setActiveSection }: any) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
     { id: 'hero-editor', label: 'Hero/Content Editor', icon: FileText },
-    { id: 'sponsors', label: 'Sponsors Manager', icon: Award },
-    { id: 'events', label: 'Events Manager', icon: Calendar },
     { id: 'students', label: 'Student Manager', icon: Users },
     { id: 'schools', label: 'Schools Manager', icon: School },
+    { id: 'sponsors', label: 'Sponsors Manager', icon: Award },
+    { id: 'events', label: 'Events Manager', icon: Calendar },
     { id: 'registrations', label: 'Registrations & Contacts', icon: Users },
     { id: 'payments', label: 'Payments Ledger', icon: CreditCard },
     { id: 'resources', label: 'Resources Manager', icon: BookOpen },
