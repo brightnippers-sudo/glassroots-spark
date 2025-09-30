@@ -1,3 +1,4 @@
+// src/pages/Dashboard.tsx
 import { useState, useEffect, useRef } from "react";
 import { 
   User, 
@@ -25,15 +26,18 @@ import { authService } from "@/services/authService";
 import { useToast } from "@/components/ui/use-toast";
 import ProfileEditor from "@/components/ProfileEditor";
 
+const API_BASE = "https://scholars.ng/api.php";
+
 const Dashboard = () => {
   const [selectedRegistration, setSelectedRegistration] = useState("reg-1");
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showProfileEditor, setShowProfileEditor] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const quickUploadRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const [participant, setParticipant] = useState({
+  const [participant, setParticipant] = useState<any>({
     name: "",
     id: "",
     photo: "/placeholder.svg",
@@ -47,26 +51,23 @@ const Dashboard = () => {
     photo_url: "",
     points: 0,
     registrations: 0,
-    competitions_won: 0
+    competitions_won: 0,
+    participant_code: ""
   });
-  const [registrations, setRegistrations] = useState([]);
-  const [certificates, setCertificates] = useState([]);
-  const [invoices, setInvoices] = useState([]);
+  const [registrations, setRegistrations] = useState<any[]>([]);
+  const [certificates, setCertificates] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [clubStats, setClubStats] = useState({
     referrals: 0,
     battles: 0,
     totalNeeded: 50,
     nextTier: "Silver"
   });
-  const [recentActivity, setRecentActivity] = useState<{ 
-    message: string, 
-    time: string, 
-    type?: string 
-  }[]>([]);
+  const [recentActivity, setRecentActivity] = useState<{ message: string; time: string; type?: string }[]>([]);
+
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Fetch profile directly (no nested .profile)
         const profile = await authService.getCurrentUser();
 
         setParticipant(prev => ({
@@ -75,6 +76,9 @@ const Dashboard = () => {
           name: `${profile.first_name} ${profile.last_name}`,
           first_name: profile.first_name,
           last_name: profile.last_name,
+          email: profile.email,
+          phone: profile.phone || '',
+          referral_code: profile.referral_code || '',
           tier: profile.tier || 'Basic',
           photo: profile.photo_url || '/placeholder.svg',
           photo_url: profile.photo_url || '/placeholder.svg',
@@ -88,11 +92,10 @@ const Dashboard = () => {
           participant_code: profile.participant_code || ''
         }));
 
-        // Fetch other dashboard data in parallel
         const [registrationsResponse, certificatesResponse, invoicesResponse, clubStatsResponse, activityResponse] = await Promise.all([
           apiService.getStudentRegistrations(),
           apiService.getStudentCertificates(),
-          apiService.getStudentInvoices(),
+          apiService.getStudentInvoices(),     // or payments depending on your apiService
           apiService.getStudentClubStats(),
           apiService.getStudentActivity()
         ]);
@@ -102,7 +105,6 @@ const Dashboard = () => {
         if (invoicesResponse.success) setInvoices(invoicesResponse.invoices || []);
         if (clubStatsResponse.success) setClubStats(prev => ({ ...prev, ...clubStatsResponse.stats }));
         if (activityResponse.success) setRecentActivity(activityResponse.activities || []);
-
       } catch (error) {
         console.error("Error loading dashboard data:", error);
         toast({
@@ -118,12 +120,100 @@ const Dashboard = () => {
     loadDashboardData();
   }, []);
 
+  // ===== Photo upload used by profile card and quick action =====
+  const uploadProfilePhoto = async (file: File) => {
+    if (!file) return;
+    setUploadingPhoto(true);
+
+    try {
+      // Build FormData - include minimal fields to avoid overwriting server values
+      const formData = new FormData();
+      formData.append("photo", file);
+      // include existent basic fields so backend doesn't overwrite them with empty values
+      formData.append("first_name", participant.first_name || "");
+      formData.append("last_name", participant.last_name || "");
+      if (participant.school) formData.append("school", participant.school);
+      if (participant.grade) formData.append("grade", participant.grade);
+
+      const res = await fetch(`${API_BASE}/profile/student`, {
+        method: "POST", // server accepts POST/PUT for profile update (your backend)
+        body: formData,
+        credentials: "include",
+      });
+
+      // Try to parse JSON safely
+      const text = await res.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (err) {
+        throw new Error("Invalid JSON response from server");
+      }
+
+      if (!res.ok) {
+        const errMsg = data?.error || data?.message || `Upload failed (${res.status})`;
+        throw new Error(errMsg);
+      }
+
+      // Expecting the server to return updated profile (profile.photo_url)
+      const updatedProfile = data?.profile || null;
+      if (updatedProfile && updatedProfile.photo_url) {
+        setParticipant(prev => ({ ...prev, photo: updatedProfile.photo_url, photo_url: updatedProfile.photo_url }));
+        toast({ title: "Success", description: "Profile photo updated" });
+      } else {
+        toast({ title: "Success", description: "Photo uploaded — refresh to see changes" });
+      }
+    } catch (error: any) {
+      console.error("Error uploading photo:", error);
+      toast({
+        title: "Upload failed",
+        description: error?.message || "Could not upload photo. Try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // handler wired to the camera icon input on profile card
+  const onProfileCardPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadProfilePhoto(file);
+    // reset input value so user can re-upload same file if needed
+    e.currentTarget.value = "";
+  };
+
+  // handler wired to quick action upload button
+  const onQuickActionPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadProfilePhoto(file);
+    e.currentTarget.value = "";
+  };
+
+  // ===== Profile save handler (used by ProfileEditor modal) =====
   const handleProfileSave = async (profileData: any) => {
     try {
-      // Here you would typically call an API to save the profile
-      console.log('Saving profile:', profileData);
-      
-      // Update local state with new profile data
+      const currentProfile = await authService.getCurrentUser();
+      if (!currentProfile) throw new Error('Failed to get current profile');
+
+      const payload = {
+        first_name: profileData.firstName,
+        last_name: profileData.lastName,
+        email: currentProfile.email,
+        role: currentProfile.role || 'participant',
+        school: profileData.school || null,
+        grade: profileData.grade || null,
+        phone: profileData.phone || null,
+        interests: profileData.interests || '',
+        achievements: profileData.achievements || ''
+      };
+
+      const response = await authService.updateProfile(payload);
+      if (!response.success) throw new Error(response.error || 'Failed to update profile');
+
+      // update local state
       setParticipant(prev => ({
         ...prev,
         first_name: profileData.firstName,
@@ -131,24 +221,19 @@ const Dashboard = () => {
         name: `${profileData.firstName} ${profileData.lastName}`,
         school: profileData.school,
         grade: profileData.grade,
-        // Add other fields as needed
+        phone: profileData.phone,
+        interests: profileData.interests,
+        achievements: profileData.achievements
       }));
-
-      // If there's a photo, handle the upload
-      if (profileData.photo) {
-        const response = await apiService.updateStudentPhoto(profileData.photo);
-        if (response.success && response.photo_url) {
-          setParticipant(prev => ({ 
-            ...prev, 
-            photo: response.photo_url,
-            photo_url: response.photo_url 
-          }));
-        }
-      }
-    } catch (error) {
-      console.error("Error saving profile:", error);
-      throw error; // Re-throw to let ProfileEditor handle the error
+    } catch (err) {
+      console.error("Error saving profile:", err);
+      throw err;
     }
+  };
+
+  // ===== Receipt downloader helper =====
+  const downloadReceipt = (url: string) => {
+    window.open(url, "_blank");
   };
 
   return (
@@ -176,24 +261,7 @@ const Dashboard = () => {
                       ref={fileInputRef}
                       className="hidden"
                       accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-
-                        try {
-                          setUploadingPhoto(true);
-                          const response = await apiService.updateStudentPhoto(file);
-                          if (response.success && response.photo_url) {
-                            setParticipant(prev => ({ ...prev, photo: response.photo_url }));
-                            toast({ title: "Success", description: "Profile photo updated successfully" });
-                          }
-                        } catch (error) {
-                          console.error("Error uploading photo:", error);
-                          toast({ title: "Error", description: "Could not upload photo. Please try again.", variant: "destructive" });
-                        } finally {
-                          setUploadingPhoto(false);
-                        }
-                      }}
+                      onChange={onProfileCardPhotoChange}
                     />
                     <button 
                       className="absolute -bottom-1 -right-1 glass-card p-2 rounded-full disabled:opacity-50"
@@ -213,7 +281,7 @@ const Dashboard = () => {
                 <h1 className="text-3xl font-bold text-foreground">
                   {participant.name || 'No Name Loaded'}
                 </h1>
-                <p className="text-muted-foreground">Participant ID: {participant.id}</p>
+                <p className="text-muted-foreground">Participant ID: {participant.participant_code}</p>
                 <Badge className="mt-2 bg-secondary-orange/20 text-secondary-orange">
                   {participant.tier} Member
                 </Badge>
@@ -221,256 +289,263 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* ...rest of the dashboard (registrations, club stats, activity, sidebar) unchanged */}
-
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Registrations */}
-            <GlassCard>
-              <GlassCardHeader>
-                <GlassCardTitle className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  My Registrations
-                </GlassCardTitle>
-              </GlassCardHeader>
-              <GlassCardContent className="space-y-4">
-                <select 
-                  value={selectedRegistration}
-                  onChange={(e) => setSelectedRegistration(e.target.value)}
-                  className="w-full glass-card border border-white/10 rounded-base p-3 bg-transparent text-foreground"
-                >
-                  {registrations.map(reg => (
-                    <option key={reg.id} value={reg.id}>
-                      {reg.competition_name} — {reg.status}
-                    </option>
-                  ))}
-                </select>
-                
-                {registrations.filter(r => r.id === selectedRegistration).map(reg => (
-                  <div key={reg.id} className="glass p-4 rounded-base">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold text-foreground">{reg.competition_name}</h3>
-                        <p className="text-sm text-muted-foreground">Competition Date: {reg.date}</p>
-                        <Badge className={`mt-2 ${reg.status === 'Confirmed' ? 'bg-success/20 text-success' : reg.status === 'Pending Payment' ? 'bg-secondary-orange/20 text-secondary-orange' : 'bg-muted/20 text-muted-foreground'}`}>
-                          {reg.status}
-                        </Badge>
-                      </div>
-
-                      <div className="flex space-x-2">
-                        {reg.status === "Confirmed" && reg.receipt_path && (
-                          <GlassButton variant="ghost" size="sm" onClick={() => window.open(reg.receipt_path, '_blank')}>
-                            <Download className="w-4 h-4" />
-                            Download Receipt
-                          </GlassButton>
-                        )}
-                        
-                      <div className="flex space-x-2"></div>
-                        {reg.status === "Pending Payment" && (
-                          <GlassButton variant="ghost" size="sm" onClick={() => window.location.href = `/pay/${reg.id}`}>
-                            <CreditCard className="w-4 h-4" />
-                            Pay Now
-                          </GlassButton>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </GlassCardContent>
-            </GlassCard>
-
-
-            {/* Smarter Than 20 Club */}
-            <GlassCard>
-              <GlassCardHeader>
-                <GlassCardTitle className="flex items-center gap-2">
-                  <Trophy className="w-5 h-5" />
-                  Smarter Than 20 Club
-                </GlassCardTitle>
-              </GlassCardHeader>
-              <GlassCardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="glass p-4 rounded-base text-center">
-                    <div className="text-2xl font-bold text-primary">{clubStats.referrals}</div>
-                    <div className="text-sm text-muted-foreground">Referrals</div>
-                  </div>
-                  <div className="glass p-4 rounded-base text-center">
-                    <div className="text-2xl font-bold text-primary">{clubStats.battles}</div>
-                    <div className="text-sm text-muted-foreground">Battles Won</div>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Progress to {clubStats.nextTier}</span>
-                    <span className="text-foreground">{clubStats.referrals + clubStats.battles}/{clubStats.totalNeeded}</span>
-                  </div>
-                  <Progress value={((clubStats.referrals + clubStats.battles) / clubStats.totalNeeded) * 100} className="h-2" />
-                </div>
-
-                <GlassButton className="w-full" variant="secondary">
-                  <Share2 className="w-4 h-4" />
-                  Share Referral Link
-                </GlassButton>
-              </GlassCardContent>
-            </GlassCard>
-
-            {/* Recent Activity */}
-            <GlassCard>
-              <GlassCardHeader>
-                <GlassCardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
-                  Recent Activity
-                </GlassCardTitle>
-              </GlassCardHeader>
-              <GlassCardContent className="space-y-3">
-                {recentActivity.map((activity, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center p-3 glass rounded-base"
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Content */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Registrations */}
+              <GlassCard>
+                <GlassCardHeader>
+                  <GlassCardTitle className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    My Registrations
+                  </GlassCardTitle>
+                </GlassCardHeader>
+                <GlassCardContent className="space-y-4">
+                  <select 
+                    value={selectedRegistration}
+                    onChange={(e) => setSelectedRegistration(e.target.value)}
+                    className="w-full glass-card border border-white/10 rounded-base p-3 bg-transparent text-foreground"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-foreground">{activity.message}</span>
-
-                      {/* Optional type badge */}
-                      {activity.type && (
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            activity.type === "payment_completed"
-                              ? "bg-green-500/20 text-green-600"
-                              : activity.type === "registration_created"
-                              ? "bg-blue-500/20 text-blue-600"
-                              : "bg-muted/20 text-muted-foreground"
-                          }`}
-                        >
-                          {activity.type.replace(/_/g, " ")}
-                        </span>
-                      )}
-                    </div>
-
-                    <span className="text-xs text-muted-foreground">{activity.time}</span>
-                  </div>
-                ))}
-              </GlassCardContent>
-            </GlassCard>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Certificates */}
-            <GlassCard>
-              <GlassCardHeader>
-                <GlassCardTitle className="flex items-center gap-2">
-                  <Star className="w-5 h-5" />
-                  Certificates
-                </GlassCardTitle>
-              </GlassCardHeader>
-              <GlassCardContent className="space-y-3">
-                {certificates.map((cert, index) => (
-                  <div key={index} className="glass p-3 rounded-base">
-                    <h4 className="font-medium text-foreground text-sm">{cert.title}</h4>
-                    <p className="text-xs text-muted-foreground">{cert.date}</p>
-                    <GlassButton variant="ghost" size="sm" className="mt-2 w-full">
-                      <FileDown className="w-4 h-4" />
-                      Download PDF
-                    </GlassButton>
-                  </div>
-                ))}
-              </GlassCardContent>
-            </GlassCard>
-
-            {/* Payments */}
-            <GlassCard>
-              <GlassCardHeader>
-                <GlassCardTitle className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" />
-                  Payments
-                </GlassCardTitle>
-              </GlassCardHeader>
-              <GlassCardContent className="space-y-3">
-                {invoices
-                  .filter(inv => inv.status === "completed") // ✅ Only show completed
-                  .map((inv, index) => (
-                    <div key={index} className="glass p-3 rounded-base">
+                    {registrations.map(reg => (
+                      <option key={reg.id} value={reg.id}>
+                        {reg.competition_name} — {reg.status}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {registrations.filter(r => r.id === selectedRegistration).map(reg => (
+                    <div key={reg.id} className="glass p-4 rounded-base">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className="font-medium text-foreground text-sm">
-                            Invoice #{inv.id}
-                          </h4>
-                          <p className="text-xs text-muted-foreground">{inv.created_at}</p>
-                          <p className="font-semibold text-primary">{inv.amount}</p>
-
-                          {/* Status Badge */}
-                          <Badge className="mt-2 bg-success/20 text-success">
-                            Completed
+                          <h3 className="font-semibold text-foreground">{reg.competition_name}</h3>
+                          <p className="text-sm text-muted-foreground">Competition Date: {reg.date}</p>
+                          <Badge className={`mt-2 ${reg.status === 'Confirmed' ? 'bg-success/20 text-success' : reg.status === 'Pending Payment' ? 'bg-secondary-orange/20 text-secondary-orange' : 'bg-muted/20 text-muted-foreground'}`}>
+                            {reg.status}
                           </Badge>
                         </div>
 
                         <div className="flex space-x-2">
-                          <GlassButton
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => window.open(`/receipt/${inv.id}`, '_blank')}
-                          >
-                            <Download className="w-4 h-4" />
-                            Download Receipt
-                          </GlassButton>
+                          {reg.status === "Confirmed" && reg.receipt_path && (
+                            <GlassButton variant="ghost" size="sm" onClick={() => downloadReceipt(reg.receipt_path)}>
+                              <Download className="w-4 h-4" />
+                              Download Receipt
+                            </GlassButton>
+                          )}
+
+                          {reg.status === "Pending Payment" && (
+                            <GlassButton variant="ghost" size="sm" onClick={() => window.location.href = `/pay/${reg.id}`}>
+                              <CreditCard className="w-4 h-4" />
+                              Pay Now
+                            </GlassButton>
+                          )}
                         </div>
                       </div>
                     </div>
                   ))}
-              </GlassCardContent>
-            </GlassCard>
+                </GlassCardContent>
+              </GlassCard>
 
+              {/* Smarter Than 20 Club */}
+              <GlassCard>
+                <GlassCardHeader>
+                  <GlassCardTitle className="flex items-center gap-2">
+                    <Trophy className="w-5 h-5" />
+                    Smarter Than 20 Club
+                  </GlassCardTitle>
+                </GlassCardHeader>
+                <GlassCardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="glass p-4 rounded-base text-center">
+                      <div className="text-2xl font-bold text-primary">{clubStats.referrals}</div>
+                      <div className="text-sm text-muted-foreground">Referrals</div>
+                    </div>
+                    <div className="glass p-4 rounded-base text-center">
+                      <div className="text-2xl font-bold text-primary">{clubStats.battles}</div>
+                      <div className="text-sm text-muted-foreground">Battles Won</div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Progress to {clubStats.nextTier}</span>
+                      <span className="text-foreground">{clubStats.referrals + clubStats.battles}/{clubStats.totalNeeded}</span>
+                    </div>
+                    <Progress value={((clubStats.referrals + clubStats.battles) / clubStats.totalNeeded) * 100} className="h-2" />
+                  </div>
 
-            {/* Quick Actions */}
-            <GlassCard>
-              <GlassCardHeader>
-                <GlassCardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Quick Actions
-                </GlassCardTitle>
-              </GlassCardHeader>
-              <GlassCardContent className="space-y-2">
-                <GlassButton 
-                  variant="ghost" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={() => setShowProfileEditor(true)}
-                >
-                  <User className="w-4 h-4" />
-                  Edit Profile
-                </GlassButton>
-                <GlassButton variant="ghost" size="sm" className="w-full justify-start">
-                  <Camera className="w-4 h-4" />
-                  Upload Photo
-                </GlassButton>
-                <GlassButton variant="ghost" size="sm" className="w-full justify-start">
-                  <ExternalLink className="w-4 h-4" />
-                  Contact Support
-                </GlassButton>
-                <GlassButton variant="ghost" size="sm" className="w-full justify-start"
-                  onClick={async () => {
-                    try {
-                      await authService.logout(); // or your logout function
-                      window.location.href = "/login"; // redirect to login page
-                    } catch (error) {
-                      console.error("Logout failed:", error);
-                    }
-                  }}
-                >
-                  <User className="w-4 h-4" />
-                  Logout
-                </GlassButton>
-              </GlassCardContent>
-            </GlassCard>
-          </div>
+                  <GlassButton className="w-full" variant="secondary">
+                    <Share2 className="w-4 h-4" />
+                    Share Referral Link
+                  </GlassButton>
+                </GlassCardContent>
+              </GlassCard>
+
+              {/* Recent Activity */}
+              <GlassCard>
+                <GlassCardHeader>
+                  <GlassCardTitle className="flex items-center gap-2">
+                    <Bell className="w-5 h-5" />
+                    Recent Activity
+                  </GlassCardTitle>
+                </GlassCardHeader>
+                <GlassCardContent className="space-y-3">
+                  {recentActivity.map((activity, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center p-3 glass rounded-base"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-foreground">{activity.message}</span>
+
+                        {activity.type && (
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded ${
+                              activity.type === "payment_completed"
+                                ? "bg-green-500/20 text-green-600"
+                                : activity.type === "registration_created"
+                                ? "bg-blue-500/20 text-blue-600"
+                                : "bg-muted/20 text-muted-foreground"
+                            }`}
+                          >
+                            {activity.type.replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-xs text-muted-foreground">{activity.time}</span>
+                    </div>
+                  ))}
+                </GlassCardContent>
+              </GlassCard>
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6">
+              {/* Certificates */}
+              <GlassCard>
+                <GlassCardHeader>
+                  <GlassCardTitle className="flex items-center gap-2">
+                    <Star className="w-5 h-5" />
+                    Certificates
+                  </GlassCardTitle>
+                </GlassCardHeader>
+                <GlassCardContent className="space-y-3">
+                  {certificates.map((cert, index) => (
+                    <div key={index} className="glass p-3 rounded-base">
+                      <h4 className="font-medium text-foreground text-sm">{cert.competition_name}</h4>
+                      <p className="text-xs text-muted-foreground">{cert.date}</p>
+                      <GlassButton variant="ghost" size="sm" className="mt-2 w-full">
+                        <FileDown className="w-4 h-4" />
+                        Download PDF
+                      </GlassButton>
+                    </div>
+                  ))}
+                </GlassCardContent>
+              </GlassCard>
+
+              {/* Payments */}
+              <GlassCard>
+                <GlassCardHeader>
+                  <GlassCardTitle className="flex items-center gap-2">
+                    <CreditCard className="w-5 h-5" />
+                    Payments
+                  </GlassCardTitle>
+                </GlassCardHeader>
+                <GlassCardContent className="space-y-3">
+                  {invoices
+                    .filter(inv => inv.status === "completed")
+                    .map((inv, index) => (
+                      <div key={index} className="glass p-3 rounded-base">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-medium text-foreground text-sm">
+                              Reference #{inv.payment_ref}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">{inv.created_at}</p>
+                            <p className="font-semibold text-primary">{inv.amount}</p>
+
+                            <Badge className="mt-2 bg-success/20 text-success">
+                              Completed
+                            </Badge>
+                          </div>
+
+                          <div className="flex space-x-2">
+                            <GlassButton
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(`/receipt/${inv.id}`, '_blank')}
+                            >
+                              <Download className="w-4 h-4" />
+                              Download Receipt
+                            </GlassButton>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </GlassCardContent>
+              </GlassCard>
+
+              {/* Quick Actions */}
+              <GlassCard>
+                <GlassCardHeader>
+                  <GlassCardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Quick Actions
+                  </GlassCardTitle>
+                </GlassCardHeader>
+                <GlassCardContent className="space-y-2">
+                  <GlassButton 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full justify-start"
+                    onClick={() => setShowProfileEditor(true)}
+                  >
+                    <User className="w-4 h-4" />
+                    Edit Profile
+                  </GlassButton>
+
+                  <GlassButton
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => quickUploadRef.current?.click()}
+                  >
+                    <Camera className="w-4 h-4" />
+                    Upload Photo
+                  </GlassButton>
+
+                  <input
+                    ref={quickUploadRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={onQuickActionPhotoChange}
+                  />
+
+                  <GlassButton variant="ghost" size="sm" className="w-full justify-start">
+                    <ExternalLink className="w-4 h-4" />
+                    Contact Support
+                  </GlassButton>
+                  <GlassButton variant="ghost" size="sm" className="w-full justify-start"
+                    onClick={async () => {
+                      try {
+                        await authService.logout();
+                        window.location.href = "/login";
+                      } catch (error) {
+                        console.error("Logout failed:", error);
+                      }
+                    }}
+                  >
+                    <User className="w-4 h-4" />
+                    Logout
+                  </GlassButton>
+                </GlassCardContent>
+              </GlassCard>
+            </div>
           </div>
         </div>
       </div>
-      
+
       {/* Profile Editor Modal */}
       <ProfileEditor
         isOpen={showProfileEditor}
@@ -478,9 +553,11 @@ const Dashboard = () => {
         currentProfile={{
           firstName: participant.first_name,
           lastName: participant.last_name,
+          email: participant.email,
+          phone: participant.phone,
+          referral_code: participant.referral_code,
           school: participant.school,
           grade: participant.grade,
-          phone: '', // Add phone field to participant state if needed
           interests: participant.interests,
           achievements: participant.achievements,
           photo_url: participant.photo_url,
@@ -488,7 +565,7 @@ const Dashboard = () => {
         }}
         onSave={handleProfileSave}
       />
-      
+
       <Footer />
     </div>
   );

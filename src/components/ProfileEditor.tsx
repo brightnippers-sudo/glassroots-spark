@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +11,6 @@ import {
   Trophy,
   Save,
   X,
-  Upload,
   Loader2,
   Check
 } from "lucide-react";
@@ -19,22 +18,34 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-// Profile form schema with validation
+// Phone: allow empty string OR a validated phone string
+const phoneSchema = z.union([
+  z.literal(''),
+  z
+    .string()
+    .min(10, "Phone number must be at least 10 digits")
+    .max(15, "Phone number too long")
+    .regex(/^[0-9+\s-]*$/, "Invalid phone number format")
+]);
+
+// Profile form schema with validation (added email & referralCode)
 const profileSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters").max(50, "First name too long"),
   lastName: z.string().min(2, "Last name must be at least 2 characters").max(50, "Last name too long"),
   school: z.string().min(3, "School name must be at least 3 characters").max(100, "School name too long"),
   grade: z.string().min(1, "Please select your grade"),
-  phone: z.string().optional().or(z.literal("")),
+  phone: phoneSchema,
+  email: z.string().email("Invalid email address").optional(),
+  referralCode: z.string().optional(),
   interests: z.string().optional(),
-  achievements: z.string().optional()
+  achievements: z.string().optional(),
+  role: z.string().optional()
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -42,22 +53,20 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 interface ProfileEditorProps {
   isOpen: boolean;
   onClose: () => void;
-  currentProfile: {
-    firstName: string;
-    lastName: string;
-    school: string;
-    grade: string;
-    phone?: string;
-    interests?: string;
-    achievements?: string;
-    photo_url?: string;
-    tier: string;
-  };
+  // currentProfile may come in snake_case from API or camelCase from transformers
+  currentProfile: Record<string, any>;
   onSave: (data: ProfileFormData & { photo?: File }) => Promise<void>;
 }
 
 const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEditorProps) => {
-  const [profilePhoto, setProfilePhoto] = useState<string>(currentProfile.photo_url || '/placeholder-avatar.jpg');
+  // helper to fetch value from either camelCase or snake_case keys
+  const getProfileValue = (obj: Record<string, any>, camelKey: string, snakeKey?: string) => {
+    const sk = snakeKey ?? camelKey.replace(/([A-Z])/g, "_$1").toLowerCase();
+    if (obj == null) return '';
+    return obj[camelKey] ?? obj[sk] ?? obj[snakeKey ?? sk] ?? '';
+  };
+
+  const [profilePhoto, setProfilePhoto] = useState<string>(getProfileValue(currentProfile, 'photo_url', 'photo_url') || '/placeholder-avatar.jpg');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,15 +77,41 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      firstName: currentProfile.firstName || '',
-      lastName: currentProfile.lastName || '',
-      school: currentProfile.school || '',
-      grade: currentProfile.grade || '',
-      phone: currentProfile.phone || '',
-      interests: currentProfile.interests || '',
-      achievements: currentProfile.achievements || ''
+      firstName: getProfileValue(currentProfile, 'firstName', 'first_name'),
+      lastName: getProfileValue(currentProfile, 'lastName', 'last_name'),
+      school: getProfileValue(currentProfile, 'school', 'school'),
+      grade: getProfileValue(currentProfile, 'grade', 'grade'),
+      phone: (getProfileValue(currentProfile, 'phone', 'phone') as string) || '',
+      email: (getProfileValue(currentProfile, 'email', 'email') as string) || '',
+      referralCode: (getProfileValue(currentProfile, 'referralCode', 'referral_code') as string) || '',
+      interests: getProfileValue(currentProfile, 'interests', 'interests'),
+      achievements: getProfileValue(currentProfile, 'achievements', 'achievements')
     }
   });
+
+  // Update form when currentProfile changes
+  useEffect(() => {
+    console.log('Current Profile Data:', {
+      currentProfile,
+      formValues: form.getValues()
+    });
+
+    form.reset({
+      firstName: getProfileValue(currentProfile, 'firstName', 'first_name'),
+      lastName: getProfileValue(currentProfile, 'lastName', 'last_name'),
+      school: getProfileValue(currentProfile, 'school', 'school'),
+      grade: getProfileValue(currentProfile, 'grade', 'grade'),
+      phone: (getProfileValue(currentProfile, 'phone', 'phone') as string) || '',
+      email: (getProfileValue(currentProfile, 'email', 'email') as string) || '',
+      referralCode: (getProfileValue(currentProfile, 'referralCode', 'referral_code') as string) || '',
+      interests: getProfileValue(currentProfile, 'interests', 'interests'),
+      achievements: getProfileValue(currentProfile, 'achievements', 'achievements')
+    });
+
+    // keep profile photo in sync if provided
+    const photo = getProfileValue(currentProfile, 'photo_url', 'photo_url') || getProfileValue(currentProfile, 'photo', 'photo');
+    if (photo) setProfilePhoto(photo);
+  }, [currentProfile]);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -102,13 +137,13 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
     }
 
     setIsUploading(true);
-    
+
     try {
       // Create preview URL
       const previewUrl = URL.createObjectURL(file);
       setProfilePhoto(previewUrl);
       setPhotoFile(file);
-      
+
       toast({
         title: "Photo selected",
         description: "Your new profile photo will be saved when you submit the form",
@@ -129,9 +164,10 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
   const onSubmit = async (data: ProfileFormData) => {
     setIsSaving(true);
     try {
+      console.log('Form data before save:', data);
       await onSave({ ...data, photo: photoFile || undefined });
       setShowSuccess(true);
-      
+
       // Show success state briefly then close
       setTimeout(() => {
         setShowSuccess(false);
@@ -161,10 +197,10 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
       );
       if (!confirmClose) return;
     }
-    
+
     // Reset form and photo
     form.reset();
-    setProfilePhoto(currentProfile.photo_url || '/placeholder-avatar.jpg');
+    setProfilePhoto(getProfileValue(currentProfile, 'photo_url', 'photo_url') || '/placeholder-avatar.jpg');
     setPhotoFile(null);
     onClose();
   };
@@ -181,8 +217,8 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
               <h2 className="text-2xl font-bold text-foreground">Edit Your Profile</h2>
               <p className="text-muted-foreground mt-1">Update your information and make it shine ✨</p>
             </div>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="icon"
               onClick={handleCancel}
               className="rounded-full hover:bg-white/10"
@@ -195,7 +231,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
           <div className="flex flex-col items-center mb-8">
             <div className="relative group">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white/20 shadow-lg transition-transform duration-300 group-hover:scale-105">
-                <img 
+                <img
                   src={profilePhoto}
                   alt="Profile"
                   className="w-full h-full object-cover"
@@ -206,7 +242,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
                   </div>
                 )}
               </div>
-              
+
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
@@ -219,7 +255,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
                 )}
               </button>
             </div>
-            
+
             <input
               ref={fileInputRef}
               type="file"
@@ -227,7 +263,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
               onChange={handlePhotoUpload}
               className="hidden"
             />
-            
+
             <p className="text-sm text-muted-foreground mt-3 text-center">
               Click the camera icon to change your photo
               <br />
@@ -239,7 +275,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
           <div className="flex justify-center mb-8">
             <Badge className="bg-secondary-orange/20 text-secondary-orange px-4 py-2 text-sm font-medium">
               <Trophy className="w-4 h-4 mr-2" />
-              {currentProfile.tier} Member
+              {getProfileValue(currentProfile, 'tier', 'tier') || 'Basic'} Member
             </Badge>
           </div>
 
@@ -252,7 +288,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
                   <User className="w-5 h-5 text-primary" />
                   Basic Information
                 </h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -271,7 +307,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="lastName"
@@ -343,7 +379,75 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
                     </FormItem>
                   )}
                 />
+
+                {/* Email field */}
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">Email Address</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="email"
+                          placeholder="you@example.com"
+                          className="glass-card border-white/10 focus:border-primary/50 transition-all duration-300"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
               </div>
+
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => {
+                    // debug: shows what the field currently has
+                    console.log('Phone field value:', field.value);
+                    return (
+                      <FormItem>
+                        <FormLabel className="text-foreground flex items-center gap-2">
+                          <Phone className="w-4 h-4" />
+                          Phone Number
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="tel"
+                            placeholder="+234 xxx xxx xxxx"
+                            className="glass-card border-white/10 focus:border-primary/50 transition-all duration-300"
+                            value={field.value ?? ''}
+                            onChange={(e) => field.onChange(e.target.value)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
+
+                {/* Referral code (editable) */}
+                <FormField
+                  control={form.control}
+                  name="referralCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">Referral Code</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder={"Visit your Profile > Invite Friends on quiz.10mytt.com to get Refferal Code."}
+                          className="glass-card border-white/10 focus:border-primary/50 transition-all duration-300"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
               {/* Optional Information */}
               <div className="space-y-4">
@@ -352,27 +456,6 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
                   Additional Details
                   <span className="text-sm font-normal text-muted-foreground">(Optional)</span>
                 </h3>
-
-                <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-foreground flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        Phone Number
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="+234 xxx xxx xxxx"
-                          className="glass-card border-white/10 focus:border-primary/50 transition-all duration-300"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
                 <FormField
                   control={form.control}
@@ -439,7 +522,7 @@ const ProfileEditor = ({ isOpen, onClose, currentProfile, onSave }: ProfileEdito
                     </>
                   )}
                 </GlassButton>
-                
+
                 <Button
                   type="button"
                   variant="outline"

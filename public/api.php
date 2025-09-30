@@ -1,12 +1,10 @@
 <?php
-// --------- CORS & Session Setup ---------
+// --------- CORS & Session Setup (paste at top, replace prior CORS code) ---------
 // Allowed origins - put your frontend origin(s) here, do NOT use '*' when using credentials
 $allowedOrigins = [
     'https://app.scholars.ng',   // example production UI origin
     'https://scholars.ng',       // if front-end is same domain
     'http://localhost:8080',     // local dev (vite) - add as needed
-    'http://localhost:5173',     // vite default port
-    'http://127.0.0.1:5173',    // vite default port
     'http://127.0.0.1:8080'
 ];
 
@@ -23,6 +21,11 @@ header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
 
 // Database connection
 $host = "localhost";
@@ -58,22 +61,6 @@ function checkAuth() {
         echo json_encode(['error' => 'Unauthorized']);
         exit;
     }
-    
-    // Refresh session expiry
-    if (isset($_SESSION['expires_at'])) {
-        $expiresAt = strtotime($_SESSION['expires_at']);
-        if (time() > $expiresAt) {
-            session_destroy();
-            http_response_code(401);
-            echo json_encode(['error' => 'Session expired']);
-            exit;
-        }
-        // Extend session if it's going to expire soon (within 30 minutes)
-        if ($expiresAt - time() < 1800) {
-            $_SESSION['expires_at'] = date('Y-m-d H:i:s', time() + (24 * 60 * 60)); // Extend by 24 hours
-        }
-    }
-    return true;
 }
 
 function getUserPermissions($db, $userId) {
@@ -145,6 +132,28 @@ try {
     exit;
 }
 
+function assignParticipantCode($db, $userId) {
+    // 1. Check if user already has a participant_code
+    $stmt = $db->prepare("SELECT participant_code FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $existing = $stmt->fetchColumn();
+
+    if ($existing) {
+        return $existing; // already assigned
+    }
+
+    // 2. Generate next code (format: PRT-0001, PRT-0002, ...)
+    $stmt = $db->query("SELECT COUNT(*) + 1 FROM users");
+    $nextNumber = $stmt->fetchColumn();
+    $participantCode = sprintf("PRT-%04d", $nextNumber);
+
+    // 3. Save it to the user record
+    $update = $db->prepare("UPDATE users SET participant_code = ? WHERE id = ?");
+    $update->execute([$participantCode, $userId]);
+
+    return $participantCode;
+}
+
 // Get the request method and endpoint
 $method = $_SERVER['REQUEST_METHOD'];
 $fullPath = $_SERVER['REQUEST_URI'];
@@ -162,6 +171,8 @@ if (isset($_GET['debug'])) {
     ]);
     exit;
 }
+
+require_once __DIR__ . '/includes/activity.php';
 
 // Handle different API endpoints
 switch($path) {
@@ -979,49 +990,107 @@ switch($path) {
     case '/auth/login/':
         if ($method === 'POST') {
             $data = json_decode(file_get_contents('php://input'), true);
-            
+    
             if (!isset($data['email']) || !isset($data['password'])) {
                 http_response_code(400);
                 echo json_encode(['error' => 'Email and password are required']);
                 exit;
             }
-
+    
+            $rememberMe = isset($data['rememberMe']) ? (bool)$data['rememberMe'] : false;
+    
             try {
-                $stmt = $db->prepare('SELECT * FROM users WHERE email = ? AND auth_provider = "email" LIMIT 1');
+                $stmt = $db->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
                 $stmt->execute([$data['email']]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
+    
                 if (!$user || !password_verify($data['password'], $user['password_hash'])) {
                     http_response_code(401);
                     echo json_encode(['error' => 'Invalid credentials']);
                     exit;
                 }
-
-                // Create PHP session
+    
+                if (session_status() === PHP_SESSION_NONE) {
+                    session_start();
+                }
+    
+                // regenerate session id for security
+                session_regenerate_id(true);
+    
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['email'] = $user['email'];
-
-                // Create session record in database
-                $sessionId = session_id();
-                $stmt = $db->prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)');
-                $stmt->execute([
-                    $sessionId,
-                    $user['id'],
-                    date('Y-m-d H:i:s', time() + (30 * 24 * 60 * 60)) // 30 days
-                ]);
-
-                // Remove sensitive data
-                unset($user['password_hash']);
-                
+    
+                // --- Remember Me Implementation ---
+                if ($rememberMe) {
+                    $token = bin2hex(random_bytes(32));
+                    $expiry = time() + (30 * 24 * 60 * 60); // 30 days
+    
+                    // Save token in DB (new table: user_tokens)
+                    $stmt = $db->prepare("INSERT INTO user_tokens (user_id, token, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))");
+                    $stmt->execute([$user['id'], $token, $expiry]);
+    
+                    // Set cookie in browser
+                    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+                    setcookie("remember_token", $token, [
+                        "expires" => $expiry,
+                        "path" => "/",
+                        "httponly" => true,
+                        "samesite" => "Strict",
+                        "secure" => $secure
+                    ]);
+                }
+    
+                // --- Activity log: login (non-blocking) ---
+                try {
+                    if (function_exists('logActivity')) {
+                        // If your logActivity accepts meta/data as 4th param, pass []; otherwise adjust.
+                        logActivity($db, $user['id'], 'login', []);
+                    } else {
+                        // optional: call a fallback if you have a direct function name in includes/activity.php
+                        // do nothing if function missing
+                    }
+                } catch (Exception $e) {
+                    // Do not break login flow if logging fails
+                    error_log("Activity log failed on login for user {$user['id']}: " . $e->getMessage());
+                }
+                // --- end activity log ---
+    
                 echo json_encode([
-                    'user' => $user,
-                    'sessionId' => $sessionId
+                    "message" => "Login successful",
+                    "user" => [
+                        "id" => $user['id'],
+                        "email" => $user['email'],
+                        "role" => $user['role'] ?? 'participant',
+                        "status" => $user['status'] ?? 'active'
+                    ]
                 ]);
-            } catch (PDOException $e) {
+                exit;
+    
+            } catch (Exception $e) {
                 http_response_code(500);
-                echo json_encode(['error' => 'Server error']);
+                echo json_encode(['error' => $e->getMessage()]);
                 exit;
             }
+        }
+        break;
+        
+    case '/auth/logout':
+    case '/auth/logout/':
+        if ($method === 'POST') {
+            session_start();
+    
+            $userId = $_SESSION['user_id'] ?? null;
+    
+            // Destroy session + cookie
+            session_destroy();
+            setcookie("remember_token", "", time() - 3600, "/");
+    
+            // Log activity *after* confirming userId
+            if ($userId) {
+                logActivity($db, $userId, 'logout', []);
+            }
+    
+            echo json_encode(["message" => "Logout successful"]);
         }
         break;
 
@@ -1207,7 +1276,9 @@ switch($path) {
                 exit;
             }
         }
-        break;    case '/auth/microsoft':
+        break;    
+        
+    case '/auth/microsoft':
     case '/auth/microsoft/':
         if ($method === 'POST') {
             $data = json_decode(file_get_contents('php://input'), true);
@@ -1289,206 +1360,203 @@ switch($path) {
             }
         }
         break;
-
+        
+    // ----------------------
+    // PROFILE: student (GET/POST/PUT/DELETE)
+    // ----------------------
     case '/profile/student':
     case '/profile/student/':
         checkAuth();
-        
+    
         switch ($method) {
             case 'GET':
                 try {
-                    // Check if student_profiles table exists
-                    $stmt = $db->prepare("SHOW TABLES LIKE 'student_profiles'");
-                    $stmt->execute();
-                    if (!$stmt->fetch()) {
-                        // Create table if it doesn't exist
-                        $db->exec("CREATE TABLE IF NOT EXISTS student_profiles (
-                            id INT AUTO_INCREMENT PRIMARY KEY,
-                            user_id VARCHAR(255) NOT NULL,
-                            school VARCHAR(255),
-                            grade VARCHAR(50),
-                            interests TEXT,
-                            achievements TEXT,
-                            points INT DEFAULT 0,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                        )");
+                    $userId = $_SESSION['user_id'] ?? null;
+                    if (!$userId) {
+                        http_response_code(401);
+                        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                        break;
                     }
-
-                    // Check if roles tables exist
-                    $stmt = $db->prepare("SHOW TABLES LIKE 'roles'");
-                    $stmt->execute();
-                    if (!$stmt->fetch()) {
-                        // Create roles and user_roles tables
-                        $db->exec("CREATE TABLE IF NOT EXISTS roles (
-                            id INT AUTO_INCREMENT PRIMARY KEY,
-                            name VARCHAR(50) NOT NULL UNIQUE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )");
-                        
-                        $db->exec("CREATE TABLE IF NOT EXISTS user_roles (
-                            user_id VARCHAR(255) NOT NULL,
-                            role_id INT NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            PRIMARY KEY (user_id, role_id),
-                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
-                        )");
-
-                        // Insert default roles
-                        $stmt = $db->prepare("INSERT IGNORE INTO roles (name) VALUES ('student'), ('teacher'), ('admin')");
-                        $stmt->execute();
-                    }
-
-                    // Get user basic info with profile
+    
+                    // Query user + profile in one go
                     $stmt = $db->prepare("
                         SELECT 
-                            u.id,
-                            u.first_name,
-                            u.last_name,
+                            u.id AS user_id,
                             u.email,
-                            u.status,
-                            u.photo_url,
-                            COALESCE(sp.school, '') as school,
-                            COALESCE(sp.grade, '') as grade,
-                            COALESCE(sp.interests, '') as interests,
-                            COALESCE(sp.achievements, '') as achievements,
-                            COALESCE(sp.points, 0) as points,
-                            CASE 
-                                WHEN COALESCE(sp.points, 0) >= 100 THEN 'Platinum'
-                                WHEN COALESCE(sp.points, 0) >= 50 THEN 'Gold'
-                                WHEN COALESCE(sp.points, 0) >= 10 THEN 'Silver'
-                                ELSE 'Basic'
-                            END as tier
+                            p.id AS profile_id,
+                            p.first_name,
+                            p.last_name,
+                            p.phone,
+                            p.photo_url,
+                            p.school,
+                            p.grade,
+                            p.tier,
+                            p.points,
+                            p.interests,
+                            p.achievements
                         FROM users u
-                        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+                        LEFT JOIN profiles p ON u.id = p.user_id
                         WHERE u.id = ?
+                        LIMIT 1
                     ");
-                    $stmt->execute([$_SESSION['user_id']]);
-                    $profile = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                    if (!$profile) {
-                        // Create a basic profile
-                        $stmt = $db->prepare("INSERT INTO student_profiles (user_id) VALUES (?)");
-                        $stmt->execute([$_SESSION['user_id']]);
-                        
-                        // Fetch the user data again
-                        $stmt = $db->prepare("
-                            SELECT 
-                                u.id,
-                                u.first_name,
-                                u.last_name,
-                                u.email,
-                                u.status,
-                                u.photo_url,
-                                '' as school,
-                                '' as grade,
-                                '' as interests,
-                                '' as achievements,
-                                0 as points,
-                                'Basic' as tier
-                            FROM users u
-                            WHERE u.id = ?
+                    $stmt->execute([$userId]);
+                    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+                    if (!$row) {
+                        http_response_code(404);
+                        echo json_encode(['success' => false, 'error' => 'User not found']);
+                        break;
+                    }
+    
+                    // Compute tier/points if club info exists
+                    $stmt = $db->prepare("SELECT referrals_count, battles_won, tier FROM club_members WHERE user_id = ? LIMIT 1");
+                    $stmt->execute([$userId]);
+                    $club = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $points = 0;
+                    $tier = $row['tier'] ?? 'Basic';
+                    if ($club) {
+                        $points = (int)($club['referrals_count'] ?? 0) + (int)($club['battles_won'] ?? 0);
+                        if ($points >= 100) $tier = 'Platinum';
+                        elseif ($points >= 50) $tier = 'Gold';
+                        elseif ($points >= 10) $tier = 'Silver';
+                        else $tier = 'Basic';
+                    }
+    
+                    // Roles fetch
+                    $roles = [];
+                    try {
+                        $rstmt = $db->prepare("
+                            SELECT rr.name
+                            FROM roles rr
+                            JOIN user_roles ur ON ur.role_id = rr.id
+                            WHERE ur.user_id = ?
                         ");
-                        $stmt->execute([$_SESSION['user_id']]);
-                        $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+                        $rstmt->execute([$userId]);
+                        $roles = $rstmt->fetchAll(PDO::FETCH_COLUMN);
+                    } catch (Exception $e) {
+                        $roles = [];
                     }
 
-                    // Get user roles
-                    $stmt = $db->prepare("
-                        SELECT r.name 
-                        FROM roles r
-                        JOIN user_roles ur ON r.id = ur.role_id
-                        WHERE ur.user_id = ?
-                    ");
-                    $stmt->execute([$_SESSION['user_id']]);
-                    $profile['roles'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-                    // If no roles are assigned, assign student role by default
-                    if (empty($profile['roles'])) {
-                        $stmt = $db->prepare("
-                            INSERT INTO user_roles (user_id, role_id)
-                            SELECT ?, id FROM roles WHERE name = 'student'
-                        ");
-                        $stmt->execute([$_SESSION['user_id']]);
-                        $profile['roles'] = ['student'];
-                    }
-
-                    echo json_encode([
-                        'success' => true,
-                        'profile' => $profile
-                    ]);
+                    // ✅ Ensure participant_code exists
+                    $participantCode = assignParticipantCode($db, $userId);
+    
+                    $out = [
+                        'id' => $row['user_id'],
+                        'profile_id' => $row['profile_id'] ?? null,
+                        'first_name' => $row['first_name'] ?? '',
+                        'last_name' => $row['last_name'] ?? '',
+                        'display_name' => trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')),
+                        'email' => $row['email'],
+                        'phone' => $row['phone'] ?? null,
+                        'photo_url' => $row['photo_url'] ?? '/placeholder.svg',
+                        'school' => $row['school'] ?? null,
+                        'grade' => $row['grade'] ?? null,
+                        'tier' => $tier,
+                        'points' => $points,
+                        'interests' => $row['interests'] ?? '',
+                        'achievements' => $row['achievements'] ?? '',
+                        'roles' => $roles,
+                        'participant_code' => $participantCode // ✅ added
+                    ];
+    
+                    echo json_encode(['success' => true, 'profile' => $out]);
                 } catch (Exception $e) {
                     http_response_code(500);
-                    echo json_encode([
-                        'success' => false,
-                        'error' => $e->getMessage()
-                    ]);
+                    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
                 }
                 break;
-
+    
             case 'POST':
             case 'PUT':
-                $data = json_decode(file_get_contents('php://input'), true);
-                
-                // Validate required fields
-                $required = ['school', 'grade'];
-                foreach ($required as $field) {
-                    if (!isset($data[$field]) || empty($data[$field])) {
-                        http_response_code(400);
-                        echo json_encode(['error' => ucfirst($field) . ' is required']);
-                        exit;
-                    }
+                $userId = $_SESSION['user_id'] ?? null;
+                if (!$userId) {
+                    http_response_code(401);
+                    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                    break;
                 }
-
-                if ($method === 'POST') {
-                    $stmt = $db->prepare("
-                        INSERT INTO student_profiles (user_id, school, grade, interests, achievements)
-                        VALUES (?, ?, ?, ?, ?)
-                    ");
-                } else {
-                    $stmt = $db->prepare("
-                        UPDATE student_profiles 
-                        SET school = ?, grade = ?, interests = ?, achievements = ?
-                        WHERE user_id = ?
-                    ");
-                }
-
+            
+                $data = json_decode(file_get_contents('php://input'), true) ?? [];
+            
+                $firstName = $data['first_name'] ?? null;
+                $lastName  = $data['last_name'] ?? null;
+                $phone     = $data['phone'] ?? null;
+                $school    = $data['school'] ?? null;
+                $grade     = $data['grade'] ?? null;
+                $photoUrl  = $data['photo_url'] ?? null;
+            
                 try {
-                    if ($method === 'POST') {
-                        $stmt->execute([
-                            $_SESSION['user_id'],
-                            $data['school'],
-                            $data['grade'],
-                            $data['interests'] ?? null,
-                            $data['achievements'] ?? null
-                        ]);
+                    // Update or insert profile
+                    $stmt = $db->prepare("SELECT id FROM profiles WHERE user_id = ? LIMIT 1");
+                    $stmt->execute([$userId]);
+                    $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+                    if ($existing) {
+                        $updates = [];
+                        $params = [];
+                        if ($firstName !== null) { $updates[] = "first_name = ?"; $params[] = $firstName; }
+                        if ($lastName  !== null) { $updates[] = "last_name = ?";  $params[] = $lastName; }
+                        if ($phone     !== null) { $updates[] = "phone = ?";      $params[] = $phone; }
+                        if ($school    !== null) { $updates[] = "school = ?";     $params[] = $school; }
+                        if ($grade     !== null) { $updates[] = "grade = ?";      $params[] = $grade; }
+                        if ($photoUrl  !== null) { $updates[] = "photo_url = ?";  $params[] = $photoUrl; }
+                        if ($interests !== null)    { $updates[] = "interests = ?";    $params[] = $interests; }
+                        if ($achievements !== null) { $updates[] = "achievements = ?"; $params[] = $achievements; }
+            
+                        if (!empty($updates)) {
+                            $params[] = $userId;
+                            $db->prepare("UPDATE profiles SET " . implode(', ', $updates) . ", updated_at = NOW() WHERE user_id = ?")
+                               ->execute($params);
+            
+                            // Log activity for profile update
+                            include_once 'includes/activity.php';
+                            logActivity($db, $userId, 'profile_updated', 'Updated profile information');
+                        }
                     } else {
-                        $stmt->execute([
-                            $data['school'],
-                            $data['grade'],
-                            $data['interests'] ?? null,
-                            $data['achievements'] ?? null,
-                            $_SESSION['user_id']
+                        // Insert minimal profile
+                        $db->prepare("
+                            INSERT INTO profiles (user_id, first_name, last_name, phone, school, grade, photo_url, interests, achievements)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ")->execute([
+                            $userId,
+                            $firstName ?? '',
+                            $lastName ?? '',
+                            $phone,
+                            $school,
+                            $grade,
+                            $photoUrl ?? '/placeholder.svg',
+                            $interests ?? '',
+                            $achievements ?? ''
                         ]);
+            
+                        // Log activity for new profile creation
+                        include_once 'includes/activity.php';
+                        logActivity($db, $userId, 'registration_created', 'Created profile information');
                     }
-                    echo json_encode(['message' => 'Profile ' . ($method === 'POST' ? 'created' : 'updated') . ' successfully']);
-                } catch (PDOException $e) {
+            
+                    echo json_encode(['success' => true, 'message' => 'Profile saved']);
+                } catch (Exception $e) {
                     http_response_code(500);
-                    echo json_encode(['error' => 'Server error']);
+                    echo json_encode(['success' => false, 'error' => 'Server error']);
                 }
                 break;
 
             case 'DELETE':
-                $stmt = $db->prepare("DELETE FROM student_profiles WHERE user_id = ?");
-                if ($stmt->execute([$_SESSION['user_id']])) {
-                    echo json_encode(['message' => 'Profile deleted successfully']);
-                } else {
+                $userId = $_SESSION['user_id'] ?? null;
+                if (!$userId) {
+                    http_response_code(401);
+                    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                    break;
+                }
+                try {
+                    $stmt = $db->prepare("DELETE FROM profiles WHERE user_id = ?");
+                    $stmt->execute([$userId]);
+                    echo json_encode(['success' => true, 'message' => 'Profile deleted']);
+                } catch (Exception $e) {
                     http_response_code(500);
-                    echo json_encode(['error' => 'Failed to delete profile']);
+                    echo json_encode(['success' => false, 'error' => 'Failed to delete profile']);
                 }
                 break;
-
+    
             default:
                 http_response_code(405);
                 echo json_encode(['error' => 'Method not allowed']);
@@ -1496,368 +1564,189 @@ switch($path) {
         }
         break;
 
+        
+    // ----------------------
+    // PROFILE: student registrations
+    // ----------------------
     case '/profile/student/registrations':
     case '/profile/student/registrations/':
         checkAuth();
-        
         if ($method === 'GET') {
             try {
-                // Check if table exists first
-                $stmt = $db->prepare("SHOW TABLES LIKE 'registrations'");
-                $stmt->execute();
-                if (!$stmt->fetch()) {
-                    // Create tables if they don't exist
-                    $db->exec("CREATE TABLE IF NOT EXISTS registrations (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id VARCHAR(255) NOT NULL,
-                        competition_id INT NOT NULL,
-                        status VARCHAR(50) NOT NULL DEFAULT 'pending',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )");
-                    
-                    $db->exec("CREATE TABLE IF NOT EXISTS competitions (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        title VARCHAR(255) NOT NULL,
-                        competition_date DATE NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )");
-                    
-                    // Add foreign key if it doesn't exist
-                    $db->exec("
-                        ALTER TABLE registrations 
-                        ADD CONSTRAINT fk_user
-                        FOREIGN KEY (user_id) 
-                        REFERENCES users(id) 
-                        ON DELETE CASCADE
-                    ");
+                $userId = $_SESSION['user_id'] ?? null;
+                if (!$userId) {
+                    http_response_code(401);
+                    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                    break;
                 }
-
+    
+                // Fetch registrations for this user
                 $stmt = $db->prepare("
                     SELECT 
                         r.id,
-                        c.title,
+                        r.competition_name,
                         r.status,
-                        DATE_FORMAT(c.competition_date, '%M %d, %Y') as date
+                        DATE_FORMAT(r.created_at, '%M %d, %Y') AS date,
+                        r.receipt_path
                     FROM registrations r
-                    JOIN competitions c ON r.competition_id = c.id
                     WHERE r.user_id = ?
-                    ORDER BY c.competition_date DESC
+                    ORDER BY r.created_at DESC
                 ");
-                $stmt->execute([$_SESSION['user_id']]);
+                $stmt->execute([$userId]);
                 $registrations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                echo json_encode([
-                    'success' => true,
-                    'registrations' => $registrations
-                ]);
+    
+                echo json_encode(['success' => true, 'registrations' => $registrations]);
             } catch (Exception $e) {
                 http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => $e->getMessage()
-                ]);
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
         }
         break;
-
+    
+    // ----------------------
+    // PROFILE: student certificates
+    // ----------------------
     case '/profile/student/certificates':
     case '/profile/student/certificates/':
         checkAuth();
-        
         if ($method === 'GET') {
             try {
-                // Check if table exists first
-                $stmt = $db->prepare("SHOW TABLES LIKE 'certificates'");
-                $stmt->execute();
-                if (!$stmt->fetch()) {
-                    // Create table if it doesn't exist
-                    $db->exec("CREATE TABLE IF NOT EXISTS certificates (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id VARCHAR(255) NOT NULL,
-                        title VARCHAR(255) NOT NULL,
-                        issued_date DATE NOT NULL,
-                        certificate_url VARCHAR(512) NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                    )");
+                $userId = $_SESSION['user_id'] ?? null;
+                if (!$userId) {
+                    http_response_code(401);
+                    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                    break;
                 }
-
+    
+                // Certificates table in your schema uses user_id and file_path + competition_id
                 $stmt = $db->prepare("
                     SELECT 
-                        id,
-                        title,
-                        DATE_FORMAT(issued_date, '%b %Y') as date,
-                        certificate_url as url
-                    FROM certificates
-                    WHERE user_id = ?
-                    ORDER BY issued_date DESC
+                        c.id,
+                        comp.competition_name AS competition_name,
+                        DATE_FORMAT(c.issued_at, '%b %Y') AS date,
+                        c.file_path AS url
+                    FROM certificates c
+                    LEFT JOIN competitions comp ON c.competition_id = comp.id
+                    WHERE c.user_id = ?
+                    ORDER BY c.issued_at DESC
                 ");
-                $stmt->execute([$_SESSION['user_id']]);
+                $stmt->execute([$userId]);
                 $certificates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                echo json_encode([
-                    'success' => true,
-                    'certificates' => $certificates
-                ]);
+    
+                echo json_encode(['success' => true, 'certificates' => $certificates]);
             } catch (Exception $e) {
                 http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => $e->getMessage()
-                ]);
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
         }
         break;
-
-    case '/profile/student/invoices':
-    case '/profile/student/invoices/':
-        checkAuth();
+    
+        case '/profile/student/invoices':
+        case '/profile/student/invoices/':
+            checkAuth();
+            if ($method === 'GET') {
+                try {
+                    $userId = $_SESSION['user_id'] ?? null;
+                    if (!$userId) {
+                        http_response_code(401);
+                        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                        break;
+                    }
         
-        if ($method === 'GET') {
-            try {
-                // Check if table exists first
-                $stmt = $db->prepare("SHOW TABLES LIKE 'payments'");
-                $stmt->execute();
-                if (!$stmt->fetch()) {
-                    // Create table if it doesn't exist
-                    $db->exec("CREATE TABLE IF NOT EXISTS payments (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id VARCHAR(255) NOT NULL,
-                        amount DECIMAL(10,2) NOT NULL,
-                        status VARCHAR(50) NOT NULL DEFAULT 'pending',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                    )");
+                    $stmt = $db->prepare("
+                        SELECT 
+                            id,
+                            CONCAT('₦', FORMAT(amount, 2)) AS amount,
+                            status,
+                            DATE_FORMAT(`created_at`, '%b %Y') AS created_at
+                        FROM payments
+                        WHERE user_id = ?
+                        ORDER BY `created_at` DESC
+                    ");
+                    $stmt->execute([$userId]);
+                    $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+                    echo json_encode(['success' => true, 'invoices' => $invoices]);
+                } catch (Exception $e) {
+                    http_response_code(500);
+                    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
                 }
+            }
+            break;
 
+        // ----------------------
+        // CLUB STATS
+        // ----------------------
+        case '/profile/student/club-stats':
+        case '/profile/student/club-stats/':
+            checkAuth();
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                http_response_code(401);
+                echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                break;
+            }
+            try {
+                // Fetch club stats for the user
                 $stmt = $db->prepare("
                     SELECT 
-                        id,
-                        CONCAT('₦', FORMAT(amount, 2)) as amount,
-                        status,
-                        DATE_FORMAT(created_at, '%b %Y') as date
-                    FROM payments
+                        referrals_count AS referrals, 
+                        battles_won AS battles, 
+                        tier
+                    FROM club_members
                     WHERE user_id = ?
-                    ORDER BY created_at DESC
+                    LIMIT 1
                 ");
-                $stmt->execute([$_SESSION['user_id']]);
-                $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                echo json_encode([
-                    'success' => true,
-                    'invoices' => $invoices
-                ]);
+                $stmt->execute([$userId]);
+                $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+                if (!$stats) {
+                    // Return defaults if no club membership yet
+                    $stats = [
+                        'referrals' => 0,
+                        'battles' => 0,
+                        'tier' => 'Basic'
+                    ];
+                }
+        
+                echo json_encode(['success' => true, 'stats' => $stats]);
             } catch (Exception $e) {
                 http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => $e->getMessage()
-                ]);
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
-        }
-        break;
-
-    case '/profile/student/club-stats':
-    case '/profile/student/club-stats/':
-        checkAuth();
+            break;
         
-        if ($method === 'GET') {
-            try {
-                // Check if tables exist first
-                $stmt = $db->prepare("SHOW TABLES LIKE 'referrals'");
-                $stmt->execute();
-                if (!$stmt->fetch()) {
-                    // Create referrals table if it doesn't exist
-                    $db->exec("CREATE TABLE IF NOT EXISTS referrals (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        referrer_id VARCHAR(255) NOT NULL,
-                        referred_id VARCHAR(255) NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE,
-                        FOREIGN KEY (referred_id) REFERENCES users(id) ON DELETE CASCADE
-                    )");
-                }
-
-                $stmt = $db->prepare("SHOW TABLES LIKE 'competition_results'");
-                $stmt->execute();
-                if (!$stmt->fetch()) {
-                    // Create competition_results table if it doesn't exist
-                    $db->exec("CREATE TABLE IF NOT EXISTS competition_results (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id VARCHAR(255) NOT NULL,
-                        competition_id INT NOT NULL,
-                        result_type ENUM('WIN', 'LOSS', 'DRAW') NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                    )");
-                }
-
-                // Get referrals count
-                $stmt = $db->prepare("
-                    SELECT COUNT(*) as referrals
-                    FROM referrals
-                    WHERE referrer_id = ?
-                ");
-                $stmt->execute([$_SESSION['user_id']]);
-                $referrals = $stmt->fetch(PDO::FETCH_ASSOC)['referrals'];
-
-                // Get battles won count
-                $stmt = $db->prepare("
-                    SELECT COUNT(*) as battles
-                    FROM competition_results
-                    WHERE user_id = ? AND result_type = 'WIN'
-                ");
-                $stmt->execute([$_SESSION['user_id']]);
-                $battles = $stmt->fetch(PDO::FETCH_ASSOC)['battles'];
-
-                // Calculate next tier requirements
-                $totalPoints = (int)$referrals + (int)$battles;
-                $nextTier = 'Silver';
-                $totalNeeded = 50;
-                
-                if ($totalPoints >= 50) {
-                    $nextTier = 'Gold';
-                    $totalNeeded = 100;
-                }
-                if ($totalPoints >= 100) {
-                    $nextTier = 'Platinum';
-                    $totalNeeded = 200;
-                }
-
-                echo json_encode([
-                    'success' => true,
-                    'stats' => [
-                        'referrals' => (int)$referrals,
-                        'battles' => (int)$battles,
-                        'totalNeeded' => $totalNeeded,
-                        'nextTier' => $nextTier
-                    ]
-                ]);
-            } catch (Exception $e) {
-                http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => $e->getMessage()
-                ]);
+        // ----------------------
+        // RECENT ACTIVITY
+        // ----------------------
+        case '/profile/student/activity':
+        case '/profile/student/activity/':
+            checkAuth();
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                http_response_code(401);
+                echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                break;
             }
-        }
-        break;
-
-    case '/profile/student/activity':
-    case '/profile/student/activity/':
-        checkAuth();
-        
-        if ($method === 'GET') {
             try {
-                // Check if table exists first
-                $stmt = $db->prepare("SHOW TABLES LIKE 'user_activity'");
-                $stmt->execute();
-                if (!$stmt->fetch()) {
-                    // Create table if it doesn't exist
-                    $db->exec("CREATE TABLE IF NOT EXISTS user_activity (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id VARCHAR(255) NOT NULL,
-                        message TEXT NOT NULL,
-                        activity_type VARCHAR(50) NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                    )");
-                }
-
+                // Fetch latest activities for the user
                 $stmt = $db->prepare("
-                    SELECT 
-                        message,
-                        activity_type as type,
-                        CASE
-                            WHEN TIMESTAMPDIFF(HOUR, created_at, NOW()) < 24 
-                            THEN CONCAT(TIMESTAMPDIFF(HOUR, created_at, NOW()), ' hours ago')
-                            WHEN TIMESTAMPDIFF(DAY, created_at, NOW()) < 7
-                            THEN CONCAT(TIMESTAMPDIFF(DAY, created_at, NOW()), ' days ago')
-                            ELSE DATE_FORMAT(created_at, '%d %b %Y')
-                        END as time
-                    FROM user_activity
+                    SELECT message, created_at AS time
+                    FROM student_activity
                     WHERE user_id = ?
                     ORDER BY created_at DESC
                     LIMIT 10
                 ");
-                $stmt->execute([$_SESSION['user_id']]);
+                $stmt->execute([$userId]);
                 $activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                echo json_encode([
-                    'success' => true,
-                    'activities' => $activities
-                ]);
+        
+                echo json_encode(['success' => true, 'activities' => $activities]);
             } catch (Exception $e) {
                 http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => $e->getMessage()
-                ]);
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
-        }
-        break;
+            break;
 
-    case '/profile/student/photo':
-    case '/profile/student/photo/':
-        if (!isset($_SESSION['user_id'])) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Unauthorized']);
-            exit;
-        }
-
-        if ($method === 'POST') {
-            if (!isset($_FILES['photo'])) {
-                http_response_code(400);
-                echo json_encode(['error' => 'No photo uploaded']);
-                exit;
-            }
-
-            $file = $_FILES['photo'];
-            $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-            
-            if (!in_array($file['type'], $allowedTypes)) {
-                http_response_code(400);
-                echo json_encode(['error' => 'Invalid file type. Only JPG, PNG and GIF allowed']);
-                exit;
-            }
-
-            $maxSize = 5 * 1024 * 1024; // 5MB
-            if ($file['size'] > $maxSize) {
-                http_response_code(400);
-                echo json_encode(['error' => 'File too large. Maximum size is 5MB']);
-                exit;
-            }
-
-            try {
-                $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $filename = uniqid() . '.' . $extension;
-                $uploadDir = '/uploads/profile_photos/';
-                $uploadPath = $_SERVER['DOCUMENT_ROOT'] . $uploadDir;
-                
-                if (!file_exists($uploadPath)) {
-                    mkdir($uploadPath, 0777, true);
-                }
-
-                if (move_uploaded_file($file['tmp_name'], $uploadPath . $filename)) {
-                    $photoUrl = $uploadDir . $filename;
-                    
-                    // Update user's photo_url in database
-                    $stmt = $db->prepare("UPDATE users SET photo_url = ? WHERE id = ?");
-                    $stmt->execute([$photoUrl, $_SESSION['user_id']]);
-
-                    echo json_encode([
-                        'message' => 'Photo uploaded successfully',
-                        'photo_url' => $photoUrl
-                    ]);
-                } else {
-                    throw new Exception('Failed to move uploaded file');
-                }
-            } catch (Exception $e) {
-                http_response_code(500);
-                echo json_encode(['error' => 'Failed to upload photo: ' . $e->getMessage()]);
-            }
-        }
-        break;
 
     default:
         http_response_code(404);

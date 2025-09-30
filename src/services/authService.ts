@@ -1,17 +1,13 @@
 const API_BASE_URL = 'https://scholars.ng/api.php'
 
-// --- Fetch Helper with Timeout ---
+// --- Helper: timeout fetch ---
 const fetchWithTimeout = async (url: string, options: RequestInit & { timeout?: number } = {}) => {
   const { timeout = 8000, ...fetchOptions } = options
-
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
 
   try {
-    const response = await fetch(url, {
-      ...fetchOptions,
-      signal: controller.signal,
-    })
+    const response = await fetch(url, { ...fetchOptions, signal: controller.signal })
     clearTimeout(id)
     return response
   } catch (error: any) {
@@ -21,60 +17,97 @@ const fetchWithTimeout = async (url: string, options: RequestInit & { timeout?: 
   }
 }
 
-// --- Unified Response Handler ---
+// --- Unified response handler (resilient) ---
 const handleResponse = async (response: Response) => {
-  const contentType = response.headers.get('content-type')
-  let data: any
+  const contentType = response.headers.get('content-type') || '';
+  let data: any = null;
+  let responseText = '';
 
   try {
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json()
-    } else {
-      const text = await response.text()
-      try {
-        data = JSON.parse(text)
-      } catch {
-        throw new Error(`Invalid response format: ${text}`)
+    responseText = await response.text();
+
+    // If empty response but status OK, return a simple success object
+    if (responseText.trim() === '') {
+      if (response.ok) {
+        return { success: true };
+      } else {
+        // Non-ok + empty body: throw for visibility
+        throw new Error(`Empty response body (status ${response.status})`);
       }
     }
-  } catch {
-    throw new Error('Error parsing response')
+
+    // Try to parse JSON if the content appears to be JSON or responseText contains JSON
+    try {
+      data = JSON.parse(responseText);
+    } catch (jsonErr) {
+      // Content-Type says JSON but parsing failed -> surface an informative error
+      if (contentType.includes('application/json')) {
+        console.error('Invalid JSON response body:', responseText);
+        throw new Error(`Invalid JSON response: ${responseText}`);
+      }
+
+      // Not JSON — wrap raw text
+      data = { text: responseText };
+    }
+  } catch (e: any) {
+    console.error('Response parsing error:', e);
+    throw new Error(`Failed to parse response: ${e.message}`);
   }
 
   if (!response.ok) {
-    const errorMsg = data?.error || data?.message || `HTTP error! status: ${response.status}`
-    throw new Error(errorMsg)
+    console.error('Server error response:', {
+      status: response.status,
+      statusText: response.statusText,
+      data,
+      responseText
+    });
+
+    // prefer structured error from server if present
+    const errorMsg = (data && (data.error || data.message)) || responseText || `HTTP error! status: ${response.status}`;
+    throw new Error(errorMsg);
   }
 
-  return {
-    success: true,
-    ...(typeof data === 'object' ? data : { data }),
+  // If parsed JSON object, merge success flag if missing
+  if (typeof data === 'object' && data !== null) {
+    return { success: data.success ?? true, ...data };
   }
+
+  return { success: true, data };
+};
+
+// --- Helper: convert camelCase to snake_case for PHP API ---
+const camelToSnake = (obj: Record<string, any>) => {
+  const result: Record<string, any> = {}
+  Object.keys(obj).forEach(key => {
+    const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+    result[snakeKey] = obj[key]
+  })
+  return result
 }
 
-// Types
+// --- Types ---
 export interface LoginResponse {
   user: {
-    id: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    status: string;
-    photo_url?: string;
-  };
-  sessionId: string;
+    id: string
+    email: string
+    first_name: string
+    last_name: string
+    status: string
+    photo_url?: string
+  }
+  sessionId: string
 }
 
 export interface RegisterData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  password: string;
-  phone?: string;
-  userType?: 'participant' | 'coach' | 'sponsor';
+  firstName: string
+  lastName: string
+  email: string
+  password: string
+  phone?: string
+  userType?: 'participant' | 'coach' | 'sponsor'
 }
 
-// Auth Service
+// --- Auth Service ---
 export const authService = {
   register: async (userData: RegisterData) => {
     const response = await fetchWithTimeout(`${API_BASE_URL}/auth/register`, {
@@ -107,21 +140,37 @@ export const authService = {
 
   getCurrentUser: async () => {
     const response = await fetchWithTimeout(`${API_BASE_URL}/profile/student`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        credentials: 'include',
-    });
-
-    const data = await handleResponse(response);
-
-    // Return the profile directly
-    if (!data.profile) {
-        throw new Error("Profile not found in response");
-    }
-
-    return data.profile;
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+    })
+    const data = await handleResponse(response)
+    console.log('Profile Response:', data); // Debug log
+    
+    // Handle both cases where profile might be in data.profile or directly in data
+    const profile = data.profile || (data.success ? data : null);
+    if (!profile) throw new Error('Profile not found in response')
+    return profile
   },
 
+  updateProfile: async (profileData: Record<string, any>) => {
+    // Convert to snake_case for PHP API
+    const payload = camelToSnake({
+      ...profileData,
+      phone: profileData.phone || null  // Ensure phone is sent as phone
+    });
+    
+    console.log('Sending profile update:', payload);
+
+    const response = await fetchWithTimeout(`${API_BASE_URL}/profile/student`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+
+    return handleResponse(response);
+  },
 
   forgotPassword: async (email: string) => {
     const response = await fetchWithTimeout(`${API_BASE_URL}/auth/forgot-password`, {
