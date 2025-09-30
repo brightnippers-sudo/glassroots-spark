@@ -16,7 +16,7 @@ interface AuthState {
   sessionId: string | null
   isLoading: boolean
   error: string | null
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<any>
   register: (formData: any) => Promise<void>
   loginWithGoogle: (token: string) => Promise<void>
   loginWithMicrosoft: (token: string) => Promise<void>
@@ -32,19 +32,23 @@ export const useAuth = create<AuthState>()(
       isLoading: false,
       error: null,
 
-      login: async (email: string, password: string) => {
+      login: async (email: string, password: string, rememberMe?: boolean) => {
         try {
           set({ isLoading: true, error: null })
 
-          const result = await apiService.login(email.trim().toLowerCase(), password)
+          const result = await apiService.auth.login(email.trim().toLowerCase(), password, rememberMe || false)
 
           if (!result?.user) {
             throw new Error('Login successful but no user data received')
           }
 
           set({
-            user: result.user,
-            sessionId: result.sessionId || result.session_id || null,
+            user: {
+              ...result.user,
+              tier: (result.user as any).tier || 'Basic',
+              role: (result.user as any).role || 'participant'
+            },
+            sessionId: result.sessionId || null,
             isLoading: false,
           })
 
@@ -60,7 +64,7 @@ export const useAuth = create<AuthState>()(
       register: async (formData) => {
         try {
           set({ isLoading: true, error: null })
-          const result = await apiService.register({
+          const result = await apiService.auth.register({
             firstName: formData.firstName,
             lastName: formData.lastName,
             email: formData.email.trim().toLowerCase(),
@@ -81,7 +85,7 @@ export const useAuth = create<AuthState>()(
 
       logout: async () => {
         try {
-          await apiService.logout()
+          await apiService.auth.logout()
         } finally {
           set({ user: null, sessionId: null })
         }
@@ -94,7 +98,7 @@ export const useAuth = create<AuthState>()(
       loginWithGoogle: async (token: string) => {
         try {
           set({ isLoading: true, error: null })
-          const result = await apiService.googleLogin(token)
+          const result = await apiService.auth.googleLogin(token)
 
           if (!result?.user) throw new Error('Google login failed')
 
@@ -113,7 +117,7 @@ export const useAuth = create<AuthState>()(
       loginWithMicrosoft: async (token: string) => {
         try {
           set({ isLoading: true, error: null })
-          const result = await apiService.microsoftLogin(token)
+          const result = await apiService.auth.microsoftLogin(token)
 
           if (!result?.user) throw new Error('Microsoft login failed')
 

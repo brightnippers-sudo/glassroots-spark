@@ -178,7 +178,7 @@ const Dashboard = () => {
                 <h1 className="text-3xl font-bold text-foreground">
                   {participant.name || 'No Name Loaded'}
                 </h1>
-                <p className="text-muted-foreground">Participant ID: {participant.participant_code}</p>
+                <p className="text-muted-foreground">Participant ID: {participant.id}</p>
                 <Badge className="mt-2 bg-secondary-orange/20 text-secondary-orange">
                   {participant.tier} Member
                 </Badge>
@@ -226,7 +226,7 @@ const Dashboard = () => {
 
                       <div className="flex space-x-2">
                         {reg.status === "Confirmed" && reg.receipt_path && (
-                          <GlassButton variant="ghost" size="sm" onClick={() => downloadReceipt(reg.receipt_path)}>
+                          <GlassButton variant="ghost" size="sm" onClick={() => window.open(reg.receipt_path, '_blank')}>
                             <Download className="w-4 h-4" />
                             Download Receipt
                           </GlassButton>
@@ -234,7 +234,7 @@ const Dashboard = () => {
                         
                       <div className="flex space-x-2"></div>
                         {reg.status === "Pending Payment" && (
-                          <GlassButton variant="ghost" size="sm" onClick={() => handlePayment(reg.id)}>
+                          <GlassButton variant="ghost" size="sm" onClick={() => window.location.href = `/pay/${reg.id}`}>
                             <CreditCard className="w-4 h-4" />
                             Pay Now
                           </GlassButton>
@@ -377,7 +377,7 @@ const Dashboard = () => {
                           <GlassButton
                             variant="ghost"
                             size="sm"
-                            onClick={() => downloadReceipt(inv.id)}
+                            onClick={() => window.open(`/receipt/${inv.id}`, '_blank')}
                           >
                             <Download className="w-4 h-4" />
                             Download Receipt

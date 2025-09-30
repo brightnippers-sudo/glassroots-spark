@@ -16,13 +16,16 @@ import {
   CheckSquare,
   X,
   Plus,
-  ArrowUpDown
+  ArrowUpDown,
+  User,
+  Camera
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlassButton } from "@/components/ui/glass-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -49,7 +52,10 @@ const StudentManager = () => {
       competitions: ['Mathematics', 'Science'],
       paymentStatus: 'paid',
       clubStatus: 'ambassador',
-      lastActivity: '2 hours ago'
+      lastActivity: '2 hours ago',
+      tier: 'Silver',
+      email: 'adaora.okwu@email.com',
+      phone: '+234 901 234 5678'
     },
     {
       id: '2',
@@ -63,7 +69,10 @@ const StudentManager = () => {
       competitions: ['English', 'Literature'],
       paymentStatus: 'pending',
       clubStatus: 'member',
-      lastActivity: '1 day ago'
+      lastActivity: '1 day ago',
+      tier: 'Bronze',
+      email: 'kemi.adeleke@email.com',
+      phone: '+234 901 234 5679'
     },
     // Add more mock students...
   ];
@@ -215,24 +224,13 @@ const StudentManager = () => {
           <div className="flex gap-2 flex-wrap">
             <Select>
               <SelectTrigger className="w-32">
-                <SelectValue placeholder="School" />
+                <SelectValue placeholder="Tier" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Schools</SelectItem>
-                <SelectItem value="royal">Royal Academy</SelectItem>
-                <SelectItem value="greenwood">Greenwood</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="primary">Primary</SelectItem>
-                <SelectItem value="jss">Junior Secondary</SelectItem>
-                <SelectItem value="sss">Senior Secondary</SelectItem>
+                <SelectItem value="all">All Tiers</SelectItem>
+                <SelectItem value="bronze">Bronze</SelectItem>
+                <SelectItem value="silver">Silver</SelectItem>
+                <SelectItem value="gold">Gold</SelectItem>
               </SelectContent>
             </Select>
             
@@ -242,6 +240,18 @@ const StudentManager = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="suspended">Suspended</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Select>
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder="Payment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -327,7 +337,7 @@ const StudentManager = () => {
                 <TableHead>Registration ID</TableHead>
                 <TableHead>School</TableHead>
                 <TableHead>Class/Category</TableHead>
-                <TableHead>Competitions</TableHead>
+                <TableHead>Tier</TableHead>
                 <TableHead>Payment</TableHead>
                 <TableHead>Club Status</TableHead>
                 <TableHead>Last Activity</TableHead>
@@ -354,7 +364,7 @@ const StudentManager = () => {
                         <p className="font-medium text-foreground">
                           {student.firstName} {student.lastName}
                         </p>
-                        <p className="text-xs text-muted-foreground">ID: {student.regId}</p>
+                        <p className="text-xs text-muted-foreground">{student.email}</p>
                       </div>
                     </div>
                   </TableCell>
@@ -367,13 +377,9 @@ const StudentManager = () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1 flex-wrap">
-                      {student.competitions.map((comp, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs">
-                          {comp}
-                        </Badge>
-                      ))}
-                    </div>
+                    <Badge className="bg-secondary-orange/20 text-secondary-orange">
+                      {student.tier}
+                    </Badge>
                   </TableCell>
                   <TableCell>{getPaymentStatusBadge(student.paymentStatus)}</TableCell>
                   <TableCell>{getClubStatusBadge(student.clubStatus)}</TableCell>
@@ -443,6 +449,12 @@ const StudentManager = () => {
                     <span className="text-foreground">{student.class}</span>
                   </div>
                   <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Tier:</span>
+                    <Badge className="bg-secondary-orange/20 text-secondary-orange">
+                      {student.tier}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Payment:</span>
                     {getPaymentStatusBadge(student.paymentStatus)}
                   </div>
@@ -452,12 +464,11 @@ const StudentManager = () => {
                   </div>
                 </div>
                 
-                <div className="flex gap-1 mt-4">
+                <div className="flex gap-1 mt-4 pt-3 border-t border-white/10">
                   <Sheet>
                     <SheetTrigger asChild>
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button variant="ghost" size="sm" className="flex-1">
                         <Eye className="w-4 h-4" />
-                        View
                       </Button>
                     </SheetTrigger>
                     <SheetContent className="glass-card w-full sm:max-w-2xl">
@@ -467,11 +478,11 @@ const StudentManager = () => {
                       <StudentDetailView student={student} />
                     </SheetContent>
                   </Sheet>
-                  <Button variant="outline" size="sm">
+                  <Button variant="ghost" size="sm" className="flex-1">
                     <Edit className="w-4 h-4" />
                   </Button>
-                  <Button variant="outline" size="sm">
-                    <MoreHorizontal className="w-4 h-4" />
+                  <Button variant="ghost" size="sm" className="flex-1">
+                    <Mail className="w-4 h-4" />
                   </Button>
                 </div>
               </GlassCard>
@@ -479,152 +490,294 @@ const StudentManager = () => {
           </div>
         )}
       </GlassCard>
-
-      {/* Pagination */}
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-muted-foreground">
-          Page 1 of 1,035
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled>Previous</Button>
-          <Button variant="outline" size="sm">1</Button>
-          <Button variant="outline" size="sm">2</Button>
-          <Button variant="outline" size="sm">3</Button>
-          <Button variant="outline" size="sm">Next</Button>
-        </div>
-      </div>
     </div>
   );
 };
 
-// Student Detail View Component
+// Enhanced Student Detail View Component
 const StudentDetailView = ({ student }: { student: any }) => {
+  const [activeTab, setActiveTab] = useState('profile');
+  const [editMode, setEditMode] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(student.avatar);
+  
+  // Mock data for activity and payments
+  const studentActivity = [
+    { type: 'login', message: 'Student logged into dashboard', time: '2 hours ago', status: 'success' },
+    { type: 'payment_completed', message: 'Payment of ₦5,000 completed for Mathematics Competition', time: '1 day ago', status: 'success' },
+    { type: 'profile_update', message: 'Profile information updated', time: '2 days ago', status: 'info' },
+    { type: 'registration', message: 'Registered for Science Competition', time: '3 days ago', status: 'info' },
+    { type: 'certificate_issued', message: 'Certificate issued for English Competition', time: '1 week ago', status: 'success' }
+  ];
+
+  const studentPayments = [
+    { id: 'P001', competition: 'Mathematics Competition', amount: '₦5,000', discount: '₦1,000', final: '₦4,000', status: 'completed', date: '2024-01-15', receipt: 'REC-001' },
+    { id: 'P002', competition: 'Science Competition', amount: '₦6,000', discount: '₦500', final: '₦5,500', status: 'pending', date: '2024-01-20', receipt: null },
+    { id: 'P003', competition: 'English Competition', amount: '₦4,500', discount: '₦0', final: '₦4,500', status: 'completed', date: '2024-01-10', receipt: 'REC-002' }
+  ];
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'login': return '🔐';
+      case 'payment_completed': return '💰';
+      case 'profile_update': return '👤';
+      case 'registration': return '📝';
+      case 'certificate_issued': return '🏆';
+      default: return '📋';
+    }
+  };
+
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <Badge className="bg-success/20 text-success">Completed</Badge>;
+      case 'pending':
+        return <Badge className="bg-secondary-orange/20 text-secondary-orange">Pending</Badge>;
+      case 'failed':
+        return <Badge className="bg-destructive/20 text-destructive">Failed</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
   return (
-    <div className="mt-6">
-      <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="registrations">Registrations</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="certificates">Certificates</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
+    <div className="mt-6 space-y-6">
+      {/* Student Header */}
+      <div className="flex items-center gap-4 p-4 glass rounded-base">
+        <div className="relative">
+          <img 
+            src={profilePhoto} 
+            alt={`${student.firstName} ${student.lastName}`}
+            className="w-16 h-16 rounded-full object-cover border-2 border-white/20"
+          />
+          {editMode && (
+            <button className="absolute -bottom-1 -right-1 glass-card p-2 rounded-full">
+              <Camera className="w-3 h-3 text-foreground" />
+            </button>
+          )}
+        </div>
+        <div className="flex-1">
+          <h3 className="text-xl font-bold text-foreground">
+            {student.firstName} {student.lastName}
+          </h3>
+          <p className="text-sm text-muted-foreground">ID: {student.regId}</p>
+          <div className="flex gap-2 mt-2">
+            <Badge className="bg-secondary-orange/20 text-secondary-orange">{student.tier}</Badge>
+            <Badge className="bg-primary/20 text-primary">{student.clubStatus}</Badge>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <GlassButton 
+            variant={editMode ? "primary" : "secondary"} 
+            size="sm"
+            onClick={() => setEditMode(!editMode)}
+          >
+            <Edit className="w-4 h-4" />
+            {editMode ? 'Save' : 'Edit'}
+          </GlassButton>
+        </div>
+      </div>
+
+      {/* Quick Actions Panel */}
+      <GlassCard className="p-4">
+        <h4 className="font-semibold text-foreground mb-3">Quick Actions</h4>
+        <div className="grid grid-cols-2 gap-2">
+          <GlassButton variant="ghost" size="sm" className="justify-start">
+            <UserCheck className="w-4 h-4" />
+            Reset Password
+          </GlassButton>
+          <GlassButton variant="ghost" size="sm" className="justify-start">
+            <User className="w-4 h-4" />
+            Impersonate Student
+          </GlassButton>
+          <GlassButton variant="ghost" size="sm" className="justify-start">
+            <Mail className="w-4 h-4" />
+            Send Message
+          </GlassButton>
+          <GlassButton variant="ghost" size="sm" className="justify-start">
+            <X className="w-4 h-4" />
+            Suspend Account
+          </GlassButton>
+        </div>
+      </GlassCard>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 glass-card">
+          <TabsTrigger value="profile" className="data-[state=active]:bg-primary/20">Profile</TabsTrigger>
+          <TabsTrigger value="activity" className="data-[state=active]:bg-primary/20">Activity</TabsTrigger>
+          <TabsTrigger value="payments" className="data-[state=active]:bg-primary/20">Payments</TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="profile" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-foreground">First Name</label>
-              <Input value={student.firstName} />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">Last Name</label>
-              <Input value={student.lastName} />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">Email</label>
-              <Input value="adaora.okwu@email.com" type="email" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">Phone</label>
-              <Input value="+234 801 234 5678" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">School</label>
-              <Input value={student.school} />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">Class</label>
-              <Input value={student.class} />
-            </div>
-          </div>
-          <GlassButton>Save Changes</GlassButton>
-        </TabsContent>
-        
-        <TabsContent value="registrations" className="space-y-4">
-          <div className="space-y-3">
-            {student.competitions.map((comp: string, idx: number) => (
-              <GlassCard key={idx} className="p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-medium text-foreground">{comp} Competition 2024</p>
-                    <p className="text-sm text-muted-foreground">Registered: March 15, 2024</p>
-                  </div>
-                  <div className="flex gap-2">
-                    {getPaymentStatusBadge(student.paymentStatus)}
-                    <Button variant="outline" size="sm">View Details</Button>
-                  </div>
-                </div>
-              </GlassCard>
-            ))}
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="payments" className="space-y-4">
-          <div className="space-y-3">
-            <GlassCard className="p-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium text-foreground">Registration Fee - Mathematics</p>
-                  <p className="text-sm text-muted-foreground">March 15, 2024</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-foreground">₦15,000</p>
-                  <Badge className="bg-success/20 text-success">Paid</Badge>
-                </div>
+
+        <TabsContent value="profile" className="space-y-4 mt-6">
+          <GlassCard className="p-4">
+            <h4 className="font-semibold text-foreground mb-4">Student Information</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="firstName">First Name</Label>
+                <Input 
+                  id="firstName" 
+                  value={student.firstName} 
+                  disabled={!editMode}
+                  className="glass-card border-white/10"
+                />
               </div>
-            </GlassCard>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="certificates" className="space-y-4">
-          <div className="space-y-3">
-            <GlassCard className="p-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium text-foreground">Participation Certificate</p>
-                  <p className="text-sm text-muted-foreground">Mathematics Competition 2024</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm">Download</Button>
-                  <Button variant="outline" size="sm">Regenerate</Button>
-                </div>
+              <div>
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input 
+                  id="lastName" 
+                  value={student.lastName} 
+                  disabled={!editMode}
+                  className="glass-card border-white/10"
+                />
               </div>
-            </GlassCard>
-          </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input 
+                  id="email" 
+                  value={student.email} 
+                  disabled={!editMode}
+                  className="glass-card border-white/10"
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone</Label>
+                <Input 
+                  id="phone" 
+                  value={student.phone} 
+                  disabled={!editMode}
+                  className="glass-card border-white/10"
+                />
+              </div>
+              <div>
+                <Label htmlFor="school">School</Label>
+                <Input 
+                  id="school" 
+                  value={student.school} 
+                  disabled={!editMode}
+                  className="glass-card border-white/10"
+                />
+              </div>
+              <div>
+                <Label htmlFor="grade">Grade/Class</Label>
+                <Input 
+                  id="grade" 
+                  value={student.class} 
+                  disabled={!editMode}
+                  className="glass-card border-white/10"
+                />
+              </div>
+              <div>
+                <Label htmlFor="tier">Tier</Label>
+                <Select disabled={!editMode}>
+                  <SelectTrigger className="glass-card border-white/10">
+                    <SelectValue placeholder={student.tier || 'Basic'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="basic">Basic</SelectItem>
+                    <SelectItem value="bronze">Bronze</SelectItem>
+                    <SelectItem value="silver">Silver</SelectItem>
+                    <SelectItem value="gold">Gold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="participantId">Participant ID</Label>
+                <Input 
+                  id="participantId" 
+                  value={student.regId} 
+                  disabled
+                  className="glass-card border-white/10 bg-muted/10"
+                />
+              </div>
+            </div>
+          </GlassCard>
         </TabsContent>
-        
-        <TabsContent value="activity" className="space-y-4">
-          <div className="space-y-3">
-            <div className="border-l-2 border-primary/20 pl-4 py-2">
-              <p className="font-medium text-foreground">Profile Updated</p>
-              <p className="text-sm text-muted-foreground">
-                Admin updated contact information • 2 hours ago
-              </p>
+
+        <TabsContent value="activity" className="space-y-4 mt-6">
+          <GlassCard className="p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="font-semibold text-foreground">Recent Activity</h4>
+              <Select>
+                <SelectTrigger className="w-32 glass-card border-white/10">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="login">Login</SelectItem>
+                  <SelectItem value="payment">Payment</SelectItem>
+                  <SelectItem value="profile">Profile</SelectItem>
+                  <SelectItem value="registration">Registration</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="border-l-2 border-primary/20 pl-4 py-2">
-              <p className="font-medium text-foreground">Payment Received</p>
-              <p className="text-sm text-muted-foreground">
-                Registration fee payment confirmed • 1 week ago
-              </p>
+            <div className="space-y-3">
+              {studentActivity.map((activity, index) => (
+                <div key={index} className="flex items-center gap-3 p-3 glass rounded-base">
+                  <div className="text-lg">{getActivityIcon(activity.type)}</div>
+                  <div className="flex-1">
+                    <p className="text-sm text-foreground">{activity.message}</p>
+                    <p className="text-xs text-muted-foreground">{activity.time}</p>
+                  </div>
+                  <Badge 
+                    className={`text-xs ${
+                      activity.type === 'payment_completed' ? 'bg-success/20 text-success' :
+                      activity.type === 'login' ? 'bg-primary/20 text-primary' :
+                      'bg-muted/20 text-muted-foreground'
+                    }`}
+                  >
+                    {activity.type.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+              ))}
             </div>
-          </div>
+          </GlassCard>
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-4 mt-6">
+          <GlassCard className="p-4">
+            <h4 className="font-semibold text-foreground mb-4">Payment History</h4>
+            <div className="space-y-3">
+              {studentPayments.map((payment) => (
+                <div key={payment.id} className="p-4 glass rounded-base">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h5 className="font-medium text-foreground">{payment.competition}</h5>
+                      <p className="text-sm text-muted-foreground">Payment ID: {payment.id}</p>
+                      <p className="text-sm text-muted-foreground">{payment.date}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground line-through">{payment.amount}</p>
+                      {payment.discount !== '₦0' && (
+                        <p className="text-sm text-secondary-orange">Discount: {payment.discount}</p>
+                      )}
+                      <p className="font-semibold text-foreground">{payment.final}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    {getPaymentStatusBadge(payment.status)}
+                    <div className="flex gap-2">
+                      {payment.receipt && (
+                        <GlassButton variant="ghost" size="sm">
+                          <Download className="w-4 h-4" />
+                          Receipt
+                        </GlassButton>
+                      )}
+                      {payment.status === 'pending' && (
+                        <GlassButton variant="secondary" size="sm">
+                          <CheckSquare className="w-4 h-4" />
+                          Mark Paid
+                        </GlassButton>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
         </TabsContent>
       </Tabs>
     </div>
   );
 };
-
-function getPaymentStatusBadge(status: string) {
-  switch (status) {
-    case 'paid':
-      return <Badge className="bg-success/20 text-success">Paid</Badge>;
-    case 'pending':
-      return <Badge className="bg-secondary-orange/20 text-secondary-orange">Pending</Badge>;
-    case 'cancelled':
-      return <Badge className="bg-destructive/20 text-destructive">Cancelled</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
 
 export default StudentManager;

@@ -45,8 +45,8 @@ const Login = () => {
     try {
       const response = await authService.login(loginData.email, loginData.password, rememberMe);
       
-      if (!response.success) {
-        throw new Error(response.error || 'Login failed');
+      if (!response || !response.user) {
+        throw new Error('Login failed');
       }
       
       // Get status from user object
@@ -63,25 +63,8 @@ const Login = () => {
         return;
       }
 
-      // Get user role and navigate based on type
-      const userRole = response.user?.roles?.[0] ?? 'participant';
-      
-      switch (userRole) {
-        case 'participant':
-          navigate('/dashboard');
-          break;
-        case 'coach':
-          navigate('/coach-dashboard');
-          break;
-        case 'sponsor':
-          navigate('/sponsors-dashboard');
-          break;
-        case 'admin':
-          navigate('/admin');
-          break;
-        default:
-          navigate('/dashboard');
-      }
+      // Navigate to dashboard by default for now
+      navigate('/dashboard');
     } catch (err) {
       const msg = (err as Error)?.message ?? 'Login failed';
       toast({
